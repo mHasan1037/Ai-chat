@@ -3,8 +3,7 @@ import upload from "../config/multer.js";
 import fs from "fs";
 import { Queue } from "bullmq";
 import { QdrantVectorStore } from "@langchain/qdrant";
-import { GeminiEmbeddings } from "../utils/GeminiEmbeddings.js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { OllamaEmbeddings, ChatOllama } from "@langchain/ollama";
 
 const queue = new Queue("file-upload-queue", {
   connection: { host: "localhost", port: 6379 },
@@ -18,13 +17,12 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    console.log("File uploaded:", req.file.filename);
-
     //inqueue file for processing
     await queue.add("file-ready", {
       filename: req.file.filename,
       destination: req.file.destination,
       path: req.file.path,
+      collectionName: "documents"
     });
 
     res.json({
@@ -49,11 +47,16 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
 // Get uploaded files list
 router.get("/chat", async (req, res) => {
   try {
-    const userQuery = "What is my experience.";
+    const userQuery = "based on my skills can you tell me how can i study or what should i know or learn to be better software engineer";
     const collectionName = req.query.collection || "documents";
 
+    console.log("Using collection:", collectionName);
+
     // Embed & retrieve relevant chunks from Qdrant
-    const embeddings = new GeminiEmbeddings(process.env.GEMINI_API_KEY);
+    const embeddings = new OllamaEmbeddings({
+      model: "qwen3-embedding:8b",
+      baseUrl: "http://localhost:11434",
+    });
     const vectorStore = await QdrantVectorStore.fromExistingCollection(
       embeddings,
       {
@@ -61,42 +64,47 @@ router.get("/chat", async (req, res) => {
         collectionName,
       },
     );
-    const retriever = vectorStore.asRetriever({
-      k: 2,
-    });
-    const result = await retriever.invoke(userQuery);
+    const retriever = vectorStore.asRetriever({ k: 2 });
+    const docs = await retriever.invoke(userQuery);
 
-    const context = result
+    console.log("Docs retrieved:", docs.length);   
+    console.log("Docs:", JSON.stringify(docs, null, 2));
+
+    if (docs.length === 0) {
+      return res.json({ error: "No documents found. Check collection name and embedding model." });
+    }
+
+    const context = docs
       .map((doc, i) => `[${i + 1}] ${doc.pageContent}`)
       .join("\n\n");
 
-    const SYSTEM_PROMPT = `You are an assistant for answering questions about the content of a PDF document. Use only the following retrieved information to answer the question. If you don't know the answer, say you don't know. Always use all available information. Always be concise.
-    context: ${JSON.stringify(result)}
+    const SYSTEM_PROMPT = `
+      You are an assistant for answering questions about a PDF.
+
+      Rules:
+      - Use ONLY the provided context
+      - If answer is not in context → say "I don't know"
+      - Be concise
+
+      Context:
+      ${context}
     `;
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    const chat = model.startChat({
-      history: [
-        {
-          role: "user",
-          parts: [{ text: SYSTEM_PROMPT }],
-        },
-        {
-          role: "model",
-          parts: [{ text: "Understood. I will answer using only the provided context." }],
-        },
-      ],
+    const llm = new ChatOllama({
+      model: "qwen3:14b",
+      baseUrl: "http://localhost:11434",
+      temperature: 0,
     });
 
-    const geminiResponse = await chat.sendMessage(userQuery);
-    const answer = geminiResponse.response.text();
+    const response = await llm.invoke([
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userQuery },
+    ]);
 
     return res.json({
       query: userQuery,
-      answer,
-      sources: result.map((doc) => ({
+      answer: response.content,
+      sources: docs.map((doc) => ({
         content: doc.pageContent,
         metadata: doc.metadata,
       })),

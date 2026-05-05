@@ -1,3 +1,4 @@
+import "./utils/polyfills.js";
 import { Worker } from "bullmq";
 import fs from "fs";
 import dotenv from "dotenv";
@@ -5,7 +6,7 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { GeminiEmbeddings } from "./utils/GeminiEmbeddings.js";
+import { OllamaEmbeddings } from "@langchain/ollama";
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ const worker = new Worker(
   "file-upload-queue",
   async (job) => {
     const { path, collectionName = "documents" } = job.data; 
+    console.log(`✅ Indexed into Qdrant (${collectionName})`);
     try {
       // 1. Load PDF
       const pdfBuffer = fs.readFileSync(path);
@@ -44,7 +46,10 @@ const worker = new Worker(
       const splitDocs = await splitter.splitDocuments(docs);
 
       // 4. Embeddings (Direct Gemini SDK)
-      const embeddings = new GeminiEmbeddings(process.env.GEMINI_API_KEY);
+      const embeddings = new OllamaEmbeddings({
+        model: "qwen3-embedding:8b",
+        baseUrl: "http://localhost:11434",
+      });
 
       // 5. Connect Qdrant
       const vectorStore = await QdrantVectorStore.fromExistingCollection(
