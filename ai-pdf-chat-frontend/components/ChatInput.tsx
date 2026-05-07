@@ -1,3 +1,4 @@
+import { useTheme } from "@/context/ThemeContext";
 import React, { useState } from "react";
 
 interface ChatInputProps {
@@ -5,6 +6,8 @@ interface ChatInputProps {
 }
 
 const ChatInput = ({ chatInput }: ChatInputProps) => {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const [value, setValue] = useState("");
 
   const handleSubmit = () => {
@@ -17,26 +20,36 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
     if (e.key === "Enter") handleSubmit();
   };
   return (
-    <div className="px-6 py-4 border-t border-white/10 bg-white/[0.02] backdrop-blur-sm">
+    <div
+      className={`px-6 py-4 border-t transition-colors duration-500
+      ${dark ? "border-white/10 bg-white/[0.02]" : "border-black/10 bg-black/[0.02]"}`}
+    >
+      {/* CHANGE: Input pill background, border, and focus ring switch */}
       <div
-        className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-3
-        focus-within:border-amber-400/40 focus-within:bg-amber-400/[0.03] transition-all duration-300"
+        className={`flex items-center gap-3 border rounded-2xl px-4 py-3 transition-all duration-300
+        ${
+          dark
+            ? "bg-white/5 border-white/10 focus-within:border-amber-400/40 focus-within:bg-amber-400/[0.03]"
+            : "bg-white/70 border-black/10 focus-within:border-amber-500/40 focus-within:bg-amber-50/50"
+        }`}
       >
+        {/* CHANGE: Input text and placeholder colors switch */}
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask about your document…"
-          className="flex-1 bg-transparent text-sm text-white/80 placeholder:text-white/20
-            font-mono outline-none caret-amber-400"
+          className={`flex-1 bg-transparent text-sm font-mono outline-none caret-amber-400
+            ${dark ? "text-white/80 placeholder:text-white/20" : "text-gray-700 placeholder:text-gray-400"}`}
         />
 
+        {/* Send button — amber stays consistent across themes */}
         <button
           onClick={handleSubmit}
-          className="group flex items-center justify-center w-8 h-8 rounded-xl bg-amber-400
+          className="group flex items-center justify-center w-8 h-8 rounded-xl cursor-pointer bg-amber-400
             hover:bg-amber-300 active:scale-95 transition-all duration-200
-            shadow-[0_0_16px_theme(colors.amber.400/30)] hover:shadow-[0_0_24px_theme(colors.amber.400/50)]"
+            hover:bg-amber-500"
         >
           <svg
             className="w-3.5 h-3.5 text-black -rotate-90"
@@ -53,7 +66,12 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
           </svg>
         </button>
       </div>
-      <p className="text-[10px] text-white/15 font-mono mt-2 text-center tracking-widest">
+
+      {/* CHANGE: Hint text color switches */}
+      <p
+        className={`text-[10px] font-mono mt-2 text-center tracking-widest
+        ${dark ? "text-white/15" : "text-gray-300"}`}
+      >
         ENTER ↵ to send
       </p>
     </div>

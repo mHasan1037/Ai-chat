@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ChatInput from "./ChatInput";
 import AllChats from "./AllChats";
 import { useAIChat } from "../hooks/useAIChat";
+import { useTheme } from "@/context/ThemeContext";
 
 export type Source = {
   content: string;
@@ -32,6 +33,8 @@ export type ChatApiResponse = {
 const MainChatContainer = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatWithAiMutation = useAIChat();
+  const { theme, toggleTheme } = useTheme();
+  const dark = theme === 'dark';
 
   const handleUserChatInput = (chat: string) => {
     const userMsg: ChatMessage = {
@@ -54,15 +57,42 @@ const MainChatContainer = () => {
   };
   return (
     <div className="flex flex-col h-screen">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-white/10 bg-white/[0.02] backdrop-blur-sm">
-        <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_theme(colors.amber.400)]" />
-        <span className="text-xs tracking-[0.25em] uppercase font-mono text-white/40">
-          Active Session
-        </span>
+      {/* CHANGE: Top bar background switches; toggle button added here */}
+      <div
+        className={`flex items-center justify-between px-6 py-4 border-b transition-colors duration-500
+        ${dark ? "border-white/10 bg-white/[0.02]" : "border-black/10 bg-black/[0.02]"}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_theme(colors.amber.400)]" />
+          <span
+            className={`text-xs tracking-[0.25em] uppercase font-mono ${dark ? "text-white/40" : "text-gray-400"}`}
+          >
+            Active Session
+          </span>
+        </div>
+
+        {/* CHANGE: Theme toggle button — new addition in top bar */}
+        <button
+          onClick={toggleTheme}
+          className={`relative cursor-pointer flex items-center w-14 h-7 rounded-full border transition-all duration-500 focus:outline-none
+            ${
+              dark
+                ? "bg-white/10 border-white/20 hover:border-amber-400/50"
+                : "bg-black/10 border-black/20 hover:border-amber-500/50"
+            }`}
+          aria-label="Toggle theme"
+        >
+          {/* Track icons */}
+          <span className="absolute left-1.5 text-[11px]">🌙</span>
+          <span className="absolute right-1.5 text-[11px]">☀️</span>
+          {/* Sliding knob */}
+          <span
+            className={`absolute w-5 h-5 rounded-full bg-amber-400 shadow-md transition-all duration-500
+            ${dark ? "left-1" : "left-[calc(100%-1.5rem)]"}`}
+          />
+        </button>
       </div>
 
-      {/* Chat area fills remaining space */}
       <div className="flex-1 overflow-hidden">
         <AllChats
           messages={messages}
@@ -70,7 +100,6 @@ const MainChatContainer = () => {
         />
       </div>
 
-      {/* Input pinned to bottom */}
       <ChatInput chatInput={handleUserChatInput} />
     </div>
   );
