@@ -32,7 +32,6 @@ const FileUpload = () => {
           <p className="text-[10px] tracking-[0.3em] text-amber-400/70 uppercase font-mono mb-1">
             Document Vault
           </p>
-          {/* CHANGE: Heading color switches */}
           <h2
             className={`text-xl font-semibold tracking-tight ${dark ? "text-white/90" : "text-gray-800"}`}
           >
@@ -40,7 +39,6 @@ const FileUpload = () => {
           </h2>
         </div>
 
-        {/* CHANGE: Upload button glass panel switches between dark/light frosted styles */}
         <button
           onClick={() => fileInputRef.current?.click()}
           className={`group relative w-full cursor-pointer overflow-hidden rounded-xl border p-5
@@ -59,7 +57,6 @@ const FileUpload = () => {
             <FaCloudUploadAlt className="text-amber-400 text-xl" />
           </div>
           <div className="text-center">
-            {/* CHANGE: Label text color switches */}
             <p
               className={`text-sm font-medium transition-colors ${dark ? "text-white/80 group-hover:text-white" : "text-gray-600 group-hover:text-gray-900"}`}
             >

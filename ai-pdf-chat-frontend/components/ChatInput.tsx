@@ -19,12 +19,12 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSubmit();
   };
+
   return (
     <div
       className={`px-6 py-4 border-t transition-colors duration-500
       ${dark ? "border-white/10 bg-white/[0.02]" : "border-black/10 bg-black/[0.02]"}`}
     >
-      {/* CHANGE: Input pill background, border, and focus ring switch */}
       <div
         className={`flex items-center gap-3 border rounded-2xl px-4 py-3 transition-all duration-300
         ${
@@ -33,7 +33,6 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
             : "bg-white/70 border-black/10 focus-within:border-amber-500/40 focus-within:bg-amber-50/50"
         }`}
       >
-        {/* CHANGE: Input text and placeholder colors switch */}
         <input
           type="text"
           value={value}
@@ -43,8 +42,6 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
           className={`flex-1 bg-transparent text-sm font-mono outline-none caret-amber-400
             ${dark ? "text-white/80 placeholder:text-white/20" : "text-gray-700 placeholder:text-gray-400"}`}
         />
-
-        {/* Send button — amber stays consistent across themes */}
         <button
           onClick={handleSubmit}
           className="group flex items-center justify-center w-8 h-8 rounded-xl cursor-pointer bg-amber-400
@@ -67,7 +64,6 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
         </button>
       </div>
 
-      {/* CHANGE: Hint text color switches */}
       <p
         className={`text-[10px] font-mono mt-2 text-center tracking-widest
         ${dark ? "text-white/15" : "text-gray-300"}`}

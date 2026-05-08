@@ -34,7 +34,7 @@ const MainChatContainer = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatWithAiMutation = useAIChat();
   const { theme, toggleTheme } = useTheme();
-  const dark = theme === 'dark';
+  const dark = theme === "dark";
 
   const handleUserChatInput = (chat: string) => {
     const userMsg: ChatMessage = {
@@ -57,7 +57,6 @@ const MainChatContainer = () => {
   };
   return (
     <div className="flex flex-col h-screen">
-      {/* CHANGE: Top bar background switches; toggle button added here */}
       <div
         className={`flex items-center justify-between px-6 py-4 border-b transition-colors duration-500
         ${dark ? "border-white/10 bg-white/[0.02]" : "border-black/10 bg-black/[0.02]"}`}
@@ -71,7 +70,6 @@ const MainChatContainer = () => {
           </span>
         </div>
 
-        {/* CHANGE: Theme toggle button — new addition in top bar */}
         <button
           onClick={toggleTheme}
           className={`relative cursor-pointer flex items-center w-14 h-7 rounded-full border transition-all duration-500 focus:outline-none
@@ -82,10 +80,8 @@ const MainChatContainer = () => {
             }`}
           aria-label="Toggle theme"
         >
-          {/* Track icons */}
           <span className="absolute left-1.5 text-[11px]">🌙</span>
           <span className="absolute right-1.5 text-[11px]">☀️</span>
-          {/* Sliding knob */}
           <span
             className={`absolute w-5 h-5 rounded-full bg-amber-400 shadow-md transition-all duration-500
             ${dark ? "left-1" : "left-[calc(100%-1.5rem)]"}`}
