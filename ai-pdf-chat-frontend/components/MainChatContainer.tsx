@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import ChatInput from "./ChatInput";
 import AllChats from "./AllChats";
 import { useAIChat } from "../hooks/useAIChat";
 import { useTheme } from "@/context/ThemeContext";
+import type { ChatSession } from "./ChatHistory";
 
 export type Source = {
   content: string;
@@ -30,30 +31,61 @@ export type ChatApiResponse = {
   sources: Source[];
 };
 
-const MainChatContainer = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+type Props = {
+  activeChat: ChatSession | null;
+  messages: ChatMessage[];
+  referenceCollectionNames: string[];
+  onMessagesChange: (messages: ChatMessage[]) => void;
+};
+
+const MainChatContainer = ({
+  activeChat,
+  messages,
+  referenceCollectionNames,
+  onMessagesChange,
+}: Props) => {
   const chatWithAiMutation = useAIChat();
   const { theme, toggleTheme } = useTheme();
   const dark = theme === "dark";
 
   const handleUserChatInput = (chat: string) => {
+    if (!activeChat) return;
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content: chat,
     };
-    setMessages((prev) => [...prev, userMsg]);
-    chatWithAiMutation.mutate(chat, {
-      onSuccess: (data) => {
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.answer,
-          sources: data.sources,
-        };
-        setMessages((prev) => [...prev, aiMsg]);
+    onMessagesChange([...messages, userMsg]);
+    chatWithAiMutation.mutate(
+      {
+        input: chat,
+        collectionName: activeChat.collectionName,
+        referenceCollectionNames,
       },
-    });
+      {
+        onSuccess: (data) => {
+          const aiMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: data.answer,
+            sources: data.sources,
+          };
+          onMessagesChange([...messages, userMsg, aiMsg]);
+        },
+        onError: (error) => {
+          const aiMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              error instanceof Error
+                ? `I could not answer from this PDF yet: ${error.message}`
+                : "I could not answer from this PDF yet.",
+          };
+          onMessagesChange([...messages, userMsg, aiMsg]);
+        },
+      },
+    );
   };
   return (
     <div className="flex flex-col h-screen">
@@ -66,7 +98,7 @@ const MainChatContainer = () => {
           <span
             className={`text-xs tracking-[0.25em] uppercase font-mono ${dark ? "text-white/40" : "text-gray-400"}`}
           >
-            Active Session
+            {activeChat ? activeChat.title : "No Active Session"}
           </span>
         </div>
 
@@ -96,7 +128,7 @@ const MainChatContainer = () => {
         />
       </div>
 
-      <ChatInput chatInput={handleUserChatInput} />
+      <ChatInput chatInput={handleUserChatInput} disabled={!activeChat} />
     </div>
   );
 };

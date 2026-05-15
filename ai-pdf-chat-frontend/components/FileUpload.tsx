@@ -4,7 +4,26 @@ import { FaCloudUploadAlt } from "react-icons/fa";
 import { useUpload } from "../hooks/useUpload";
 import { useTheme } from "@/context/ThemeContext";
 
-const FileUpload = () => {
+type Props = {
+  onUploadStart: (file: File) => {
+    chatId: string;
+    collectionName: string;
+  };
+  onUploadSuccess: (payload: {
+    chatId: string;
+    collectionName: string;
+    file: File;
+    uploadedFile?: {
+      filename: string;
+      path: string;
+      size: number;
+      mimetype: string;
+    };
+  }) => void;
+  onUploadError: (chatId: string) => void;
+};
+
+const FileUpload = ({ onUploadStart, onUploadSuccess, onUploadError }: Props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMutation = useUpload();
   const { theme } = useTheme();
@@ -13,7 +32,22 @@ const FileUpload = () => {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      uploadMutation.mutate(file);
+      const { chatId, collectionName } = onUploadStart(file);
+      uploadMutation.mutate(
+        { file, chatId, collectionName },
+        {
+          onSuccess: (data) => {
+            onUploadSuccess({
+              chatId,
+              collectionName,
+              file,
+              uploadedFile: data.file,
+            });
+          },
+          onError: () => onUploadError(chatId),
+        },
+      );
+      event.target.value = "";
     }
   };
 
@@ -27,7 +61,7 @@ const FileUpload = () => {
         style={{ display: "none" }}
       />
 
-      <div className="p-6 h-full flex flex-col gap-4">
+      <div className="p-6 flex flex-col gap-4">
         <div className="mb-2">
           <p className="text-[10px] tracking-[0.3em] text-amber-400/70 uppercase font-mono mb-1">
             Document Vault
@@ -60,7 +94,7 @@ const FileUpload = () => {
             <p
               className={`text-sm font-medium transition-colors ${dark ? "text-white/80 group-hover:text-white" : "text-gray-600 group-hover:text-gray-900"}`}
             >
-              Upload PDF
+              {uploadMutation.isPending ? "Uploading..." : "Upload PDF"}
             </p>
             <p
               className={`text-[11px] mt-0.5 font-mono ${dark ? "text-white/30" : "text-gray-400"}`}

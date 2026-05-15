@@ -3,15 +3,16 @@ import React, { useState } from "react";
 
 interface ChatInputProps {
   chatInput: (chat: string) => void;
+  disabled?: boolean;
 }
 
-const ChatInput = ({ chatInput }: ChatInputProps) => {
+const ChatInput = ({ chatInput, disabled = false }: ChatInputProps) => {
   const { theme } = useTheme();
   const dark = theme === "dark";
   const [value, setValue] = useState("");
 
   const handleSubmit = () => {
-    if (!value.trim()) return;
+    if (disabled || !value.trim()) return;
     chatInput(value);
     setValue("");
   };
@@ -38,15 +39,19 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about your document…"
+          disabled={disabled}
+          placeholder={
+            disabled ? "Upload or select a PDF chat" : "Ask about your document..."
+          }
           className={`flex-1 bg-transparent text-sm font-mono outline-none caret-amber-400
             ${dark ? "text-white/80 placeholder:text-white/20" : "text-gray-700 placeholder:text-gray-400"}`}
         />
         <button
           onClick={handleSubmit}
+          disabled={disabled}
           className="group flex items-center justify-center w-8 h-8 rounded-xl cursor-pointer bg-amber-400
-            hover:bg-amber-300 active:scale-95 transition-all duration-200
-            hover:bg-amber-500"
+            hover:bg-amber-300 active:scale-95 transition-all duration-200 hover:bg-amber-500
+            disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg
             className="w-3.5 h-3.5 text-black -rotate-90"
@@ -68,7 +73,7 @@ const ChatInput = ({ chatInput }: ChatInputProps) => {
         className={`text-[10px] font-mono mt-2 text-center tracking-widest
         ${dark ? "text-white/15" : "text-gray-300"}`}
       >
-        ENTER ↵ to send
+        ENTER to send
       </p>
     </div>
   );

@@ -1,9 +1,28 @@
 import { ChatApiResponse } from "@/components/MainChatContainer";
 import { useMutation } from "@tanstack/react-query";
 
-const chatWithAi = async (input: string): Promise<ChatApiResponse> => {
+type ChatWithAiInput = {
+  input: string;
+  collectionName: string;
+  referenceCollectionNames?: string[];
+};
+
+const chatWithAi = async ({
+  input,
+  collectionName,
+  referenceCollectionNames = [],
+}: ChatWithAiInput): Promise<ChatApiResponse> => {
+  const params = new URLSearchParams({
+    query: input,
+    collection: collectionName,
+  });
+
+  if (referenceCollectionNames.length > 0) {
+    params.set("references", referenceCollectionNames.join(","));
+  }
+
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat?query=${encodeURIComponent(input)}&collection=documents`,
+    `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat?${params.toString()}`,
     { method: "GET" },
   );
 
@@ -11,7 +30,7 @@ const chatWithAi = async (input: string): Promise<ChatApiResponse> => {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  return response.json();;
+  return response.json();
 };
 
 export const useAIChat = () => {
