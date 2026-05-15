@@ -14,8 +14,13 @@ dotenv.config();
 const worker = new Worker(
   "file-upload-queue",
   async (job) => {
-    const { path, collectionName = "documents" } = job.data; 
-    console.log(`✅ Indexed into Qdrant (${collectionName})`);
+    const {
+      path,
+      chatId,
+      filename,
+      originalName,
+      collectionName = "documents",
+    } = job.data;
     try {
       // 1. Load PDF
       const pdfBuffer = fs.readFileSync(path);
@@ -34,7 +39,13 @@ const worker = new Worker(
       const docs = [
         new Document({
           pageContent: fullText,
-          metadata: { source: path },
+          metadata: {
+            source: path,
+            chatId,
+            filename,
+            originalName,
+            collectionName,
+          },
         }),
       ];
 
@@ -47,22 +58,21 @@ const worker = new Worker(
 
       // 4. Embeddings (Direct Gemini SDK)
       const embeddings = new OllamaEmbeddings({
-        model: "qwen3-embedding:8b",
-        baseUrl: "http://localhost:11434",
+        model: process.env.AI_EMBEDDING_MODEL_NAME,
+        baseUrl: process.env.AI_API_URL,
       });
 
       // 5. Connect Qdrant
       const vectorStore = await QdrantVectorStore.fromExistingCollection(
         embeddings,
         {
-          url: "http://localhost:6333",
+          url: process.env.VECTOR_URL,
           collectionName,
         }
       );
 
       // 6. Store embeddings
       await vectorStore.addDocuments(splitDocs);
-      console.log(`✅ Indexed into Qdrant (${collectionName})`);
 
       return { success: true };
     } catch (error) {
