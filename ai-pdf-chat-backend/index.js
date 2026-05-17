@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import express from "express";
 import cors from "cors";
-import uploadRoutes from "./routes/upload.js";
+import chatRoutes from "./routes/chatroute.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -18,7 +18,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to AI PDF Chat Backend' });
 });
 
-app.use('/api', uploadRoutes);
+app.use('/api', chatRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

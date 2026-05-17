@@ -1,66 +1,34 @@
-import express from "express";
-import upload from "../config/multer.js";
-import fs from "fs";
 import path from "path";
-import crypto from "crypto";
-import { Queue } from "bullmq";
-import { QdrantVectorStore } from "@langchain/qdrant";
-import { OllamaEmbeddings, ChatOllama } from "@langchain/ollama";
-import { QdrantClient } from "@qdrant/js-client-rest";
+import fs from "fs";
 import { getChatsCollection } from "../config/db.js";
+import {
+  collectionNameFromChatId,
+  normalizeMessages,
+  serializeChat,
+  systemPropmptFunc,
+} from "../utils/helpers.js";
 import {
   deletePdfFromCloudinary,
   uploadPdfToCloudinary,
 } from "../config/cloudinary.js";
-
-const queue = new Queue("file-upload-queue", {
-  connection: { host: "localhost", port: 6379 },
-});
-const router = express.Router();
-
-const collectionNameFromChatId = (chatId) =>
-  `chat_${chatId.replace(/[^a-zA-Z0-9_]/g, "_")}`;
-
-const serializeChat = (chat) => ({
-  id: chat.id,
-  title: chat.title,
-  fileName: chat.fileName,
-  filePath: chat.filePath,
-  fileUrl: chat.fileUrl,
-  cloudinaryPublicId: chat.cloudinaryPublicId,
-  collectionName: chat.collectionName,
-  createdAt: chat.createdAt,
-  updatedAt: chat.updatedAt,
-  messageCount: chat.messageCount ?? chat.messages?.length ?? 0,
-});
-
-const normalizeMessages = (messages) =>
-  Array.isArray(messages)
-    ? messages.filter(
-        (message) =>
-          message &&
-          typeof message.id === "string" &&
-          ["user", "assistant"].includes(message.role) &&
-          typeof message.content === "string",
-      )
-    : [];
-
-const getEmbeddings = () =>
-  new OllamaEmbeddings({
-    model: process.env.AI_EMBEDDING_MODEL_NAME,
-    baseUrl: process.env.AI_API_URL,
-  });
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { QdrantVectorStore } from "@langchain/qdrant";
+import crypto from "crypto";
+import { getEmbeddings, llm, queue } from "../utils/embeddings.js";
 
 const getRelevantDocs = async (embeddings, collectionName, query, k) => {
-  const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
-    url: process.env.VECTOR_URL,
-    collectionName,
-  });
+  const vectorStore = await QdrantVectorStore.fromExistingCollection(
+    embeddings,
+    {
+      url: process.env.VECTOR_URL,
+      collectionName,
+    },
+  );
   const retriever = vectorStore.asRetriever({ k });
   return retriever.invoke(query);
 };
 
-router.get("/chats", async (_req, res) => {
+export const getChats = async (_req, res) => {
   try {
     const collection = await getChatsCollection();
     const storedChats = await collection
@@ -81,9 +49,9 @@ router.get("/chats", async (_req, res) => {
     console.error("Load chats error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
 
-router.post("/chats", async (req, res) => {
+export const createChat = async (req, res) => {
   try {
     const now = new Date().toISOString();
     const chatId = req.body.id || crypto.randomUUID();
@@ -114,9 +82,9 @@ router.post("/chats", async (req, res) => {
     console.error("Create chat error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
 
-router.patch("/chats/:chatId", async (req, res) => {
+export const updateChat = async (req, res) => {
   try {
     const allowedUpdates = [
       "title",
@@ -149,9 +117,9 @@ router.patch("/chats/:chatId", async (req, res) => {
     console.error("Update chat error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
 
-router.put("/chats/:chatId/messages", async (req, res) => {
+export const saveMessages = async (req, res) => {
   try {
     const messages = normalizeMessages(req.body.messages);
     const now = new Date().toISOString();
@@ -180,9 +148,9 @@ router.put("/chats/:chatId/messages", async (req, res) => {
     console.error("Save chat messages error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
 
-router.post("/upload", upload.single("pdf"), async (req, res) => {
+export const uploadPdf = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -223,9 +191,9 @@ router.post("/upload", upload.single("pdf"), async (req, res) => {
     }
     res.status(500).json({ error: "Failed to process PDF" });
   }
-});
+};
 
-router.get("/chat", async (req, res) => {
+export const chatWithPdf = async (req, res) => {
   try {
     const userQuery = (req.query.query || "").trim();
     const collectionName = req.query.collection || "documents";
@@ -283,27 +251,7 @@ router.get("/chat", async (req, res) => {
       .map((doc, i) => `[Reference ${i + 1}] ${doc.pageContent}`)
       .join("\n\n");
 
-    const systemPrompt = `
-      You are an assistant for answering questions about PDF chats.
-
-      Rules:
-      - Use the Primary PDF context first.
-      - Use Reference chat context only when it helps answer the user's question.
-      - If the answer is not in any provided context, say "I don't know".
-      - Be concise.
-
-      Primary PDF context:
-      ${primaryContext || "No primary context found."}
-
-      Reference chat context:
-      ${referenceContext || "No reference context provided."}
-    `;
-
-    const llm = new ChatOllama({
-      model: process.env.AI_RESPONSE_MODEL_NAME,
-      baseUrl: process.env.AI_API_URL,
-      temperature: 0,
-    });
+    const systemPrompt = systemPropmptFunc(primaryContext, referenceContext);
 
     const response = await llm.invoke([
       { role: "system", content: systemPrompt },
@@ -322,9 +270,9 @@ router.get("/chat", async (req, res) => {
     console.error("Chat error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
+};
 
-router.delete("/chats/:chatId", async (req, res) => {
+export const deleteChat = async (req, res) => {
   try {
     const collectionName =
       req.body.collectionName || collectionNameFromChatId(req.params.chatId);
@@ -332,7 +280,8 @@ router.delete("/chats/:chatId", async (req, res) => {
     const storedChat = await chatsCollection.findOne({ id: req.params.chatId });
     const qdrantClient = new QdrantClient({ url: process.env.VECTOR_URL });
 
-    const collectionExists = await qdrantClient.collectionExists(collectionName);
+    const collectionExists =
+      await qdrantClient.collectionExists(collectionName);
     if (collectionExists.exists) {
       await qdrantClient.deleteCollection(collectionName);
     }
@@ -362,6 +311,4 @@ router.delete("/chats/:chatId", async (req, res) => {
     console.error("Delete chat error:", error);
     return res.status(500).json({ error: error.message });
   }
-});
-
-export default router;
+};
