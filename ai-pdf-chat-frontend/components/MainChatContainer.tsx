@@ -1,9 +1,10 @@
-import React from "react";
+import React, { use } from "react";
 import ChatInput from "./ChatInput";
 import AllChats from "./AllChats";
 import { useAIChat } from "../hooks/useAIChat";
 import { useTheme } from "@/context/ThemeContext";
 import type { ChatSession } from "./ChatHistory";
+import { useUpdateMessages } from "@/hooks/useUpdateMessage";
 
 export type Source = {
   content: string;
@@ -35,15 +36,14 @@ type Props = {
   activeChat: ChatSession | null;
   messages: ChatMessage[];
   referenceCollectionNames: string[];
-  onMessagesChange: (messages: ChatMessage[]) => void;
 };
 
 const MainChatContainer = ({
   activeChat,
   messages,
   referenceCollectionNames,
-  onMessagesChange,
 }: Props) => {
+  const updateMessages = useUpdateMessages(activeChat?.id ?? null);
   const chatWithAiMutation = useAIChat();
   const { theme, toggleTheme } = useTheme();
   const dark = theme === "dark";
@@ -56,7 +56,7 @@ const MainChatContainer = ({
       role: "user",
       content: chat,
     };
-    onMessagesChange([...messages, userMsg]);
+    updateMessages([...messages, userMsg]);
     chatWithAiMutation.mutate(
       {
         input: chat,
@@ -71,7 +71,7 @@ const MainChatContainer = ({
             content: data.answer,
             sources: data.sources,
           };
-          onMessagesChange([...messages, userMsg, aiMsg]);
+          updateMessages([...messages, userMsg, aiMsg]);
         },
         onError: (error) => {
           const aiMsg: ChatMessage = {
@@ -82,7 +82,7 @@ const MainChatContainer = ({
                 ? `I could not answer from this PDF yet: ${error.message}`
                 : "I could not answer from this PDF yet.",
           };
-          onMessagesChange([...messages, userMsg, aiMsg]);
+          updateMessages([...messages, userMsg, aiMsg]);
         },
       },
     );
