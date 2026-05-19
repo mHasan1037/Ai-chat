@@ -7,8 +7,8 @@ export const getDb = async () => {
   if (db) return db;
 
   const uri = process.env.MONGODB_URI;
-  if (!uri || uri.includes("<db_password>")) {
-    throw new Error("MONGODB_URI is not configured. Replace <db_password> in .env.");
+  if (!uri) {
+    throw new Error("MONGODB_URI is missing.");
   }
 
   client = client || new MongoClient(uri);
