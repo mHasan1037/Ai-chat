@@ -1,29 +1,14 @@
 import { v2 as cloudinary } from "cloudinary";
 import "dotenv/config";
 
-const isDummyValue = (value = "") =>
-  !value || value.trim().toLowerCase().startsWith("dummy");
-
-const getCloudinaryConfig = () => ({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME?.trim(),
-  api_key: process.env.CLOUDINARY_API_KEY?.trim(),
-  api_secret: process.env.CLOUDINARY_API_SECRET?.trim(),
-});
-
-export const isCloudinaryConfigured = () => {
-  const config = getCloudinaryConfig();
-
-  return (
-    !isDummyValue(config.cloud_name) &&
-    !isDummyValue(config.api_key) &&
-    !isDummyValue(config.api_secret)
-  );
-};
-
 const configureCloudinary = () => {
-  if (!isCloudinaryConfigured()) return false;
+  const cloud_name = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  const api_key = process.env.CLOUDINARY_API_KEY?.trim();
+  const api_secret = process.env.CLOUDINARY_API_SECRET?.trim();
 
-  cloudinary.config(getCloudinaryConfig());
+  if (!cloud_name || !api_key || !api_secret) return false;
+
+  cloudinary.config({ cloud_name, api_key, api_secret });
   return true;
 };
 
@@ -41,7 +26,5 @@ export const uploadPdfToCloudinary = async (filePath, chatId) => {
 export const deletePdfFromCloudinary = async (publicId) => {
   if (!publicId || !configureCloudinary()) return;
 
-  await cloudinary.uploader.destroy(publicId, {
-    resource_type: "raw",
-  });
+  await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
 };
