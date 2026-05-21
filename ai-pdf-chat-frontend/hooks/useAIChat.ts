@@ -23,7 +23,7 @@ const chatWithAi = async ({
 
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat?${params.toString()}`,
-    { method: "GET" },
+    { method: "GET", credentials: "include" },
   );
 
   if (!response.ok) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "@/context/ThemeContext";
-import FileUpload from "../components/FileUpload";
+import FileUpload from "../../components/FileUpload";
 import ChatHistory from "@/components/ChatHistory";
 import MainChatContainer from "@/components/MainChatContainer";
 import { useHomeChat } from "@/hooks/useHomeChat";

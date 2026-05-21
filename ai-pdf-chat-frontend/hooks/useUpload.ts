@@ -14,6 +14,7 @@ const uploadPdf = async ({ file, chatId, collectionName }: UploadPdfInput) => {
 
   const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/upload`, {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
 
