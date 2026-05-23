@@ -1,20 +1,28 @@
-import jwt from "jsonwebtoken";
 import { ObjectId } from "mongodb";
 import { getUsersCollection } from "../config/db.js";
+import { verifyToken } from "../utils/tokens.js";
 
-const AUTH_COOKIE_NAME = "auth_token";
+const getBearerToken = (req) => {
+  const header = req.get("authorization") || "";
+  const [scheme, token] = header.split(" ");
 
-export const authCookieName = AUTH_COOKIE_NAME;
+  return scheme?.toLowerCase() === "bearer" && token ? token : null;
+};
 
 export const requireAuth = async (req, res, next) => {
   try {
-    const token = req.cookies?.[AUTH_COOKIE_NAME];
+    const token = getBearerToken(req);
 
     if (!token) {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = verifyToken(token);
+
+    if (payload.type !== "access" || !ObjectId.isValid(payload.userId)) {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+
     const users = await getUsersCollection();
     const user = await users.findOne(
       { _id: new ObjectId(payload.userId) },
@@ -33,6 +41,6 @@ export const requireAuth = async (req, res, next) => {
 
     return next();
   } catch (_error) {
-    return res.status(401).json({ error: "Invalid session" });
+    return res.status(401).json({ error: "Invalid access token" });
   }
 };

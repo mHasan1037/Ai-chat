@@ -9,7 +9,7 @@ import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+const allowedOrigins = (process.env.FRONTEND_URL)
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);

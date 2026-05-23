@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# generated uploads
+ai-pdf-chat-backend/uploads/
+
+# frontend build output
+ai-pdf-chat-frontend/.next/
+ai-pdf-chat-frontend/out/
+ai-pdf-chat-frontend/*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db

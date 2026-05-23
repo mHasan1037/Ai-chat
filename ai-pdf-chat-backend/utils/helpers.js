@@ -42,3 +42,13 @@ export const systemPropmptFunc = (primaryContext, referenceContext) => {
           ${referenceContext || "No reference context provided."}
         `;
 };
+
+export const normalizeEmail = (email = "") => email.trim().toLowerCase();
+
+export const PASSWORD_MIN_LENGTH = 8;
+
+export const publicUser = (user) => ({
+  id: user._id.toString(),
+  email: user.email,
+  createdAt: user.createdAt,
+});

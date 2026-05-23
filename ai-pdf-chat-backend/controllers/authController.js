@@ -1,46 +1,33 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
+import { ObjectId } from "mongodb";
 import { getUsersCollection } from "../config/db.js";
-import { authCookieName } from "../middleware/authMiddleware.js";
+import {
+  normalizeEmail,
+  PASSWORD_MIN_LENGTH,
+  publicUser,
+} from "../utils/helpers.js";
+import {
+  clearRefreshTokenCookieOptions,
+  issueAccessToken,
+  issueRefreshToken,
+  refreshTokenCookieOptions,
+  REFRESH_TOKEN_COOKIE_NAME,
+  verifyToken,
+} from "../utils/tokens.js";
 
-const PASSWORD_MIN_LENGTH = 8;
-const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const issueAuthTokens = (res, user) => {
+  const userId = user._id.toString();
+  const accessToken = issueAccessToken(userId);
+  const refreshToken = issueRefreshToken(userId);
 
-const normalizeEmail = (email = "") => email.trim().toLowerCase();
+  res.cookie(
+    REFRESH_TOKEN_COOKIE_NAME,
+    refreshToken,
+    refreshTokenCookieOptions(),
+  );
 
-const publicUser = (user) => ({
-  id: user._id.toString(),
-  email: user.email,
-  createdAt: user.createdAt,
-});
-
-const getJwtSecret = () => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is missing.");
-  }
-
-  return process.env.JWT_SECRET;
-};
-
-const baseCookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  path: "/",
-});
-
-const cookieOptions = () => ({
-  ...baseCookieOptions(),
-  maxAge: TOKEN_MAX_AGE_MS,
-});
-
-const issueSession = (res, user) => {
-  const token = jwt.sign({ userId: user._id.toString() }, getJwtSecret(), {
-    expiresIn: "7d",
-  });
-
-  res.cookie(authCookieName, token, cookieOptions());
+  return accessToken;
 };
 
 export const signup = async (req, res) => {
@@ -55,14 +42,18 @@ export const signup = async (req, res) => {
     if (password.length < PASSWORD_MIN_LENGTH) {
       return res
         .status(400)
-        .json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` });
+        .json({
+          error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+        });
     }
 
     const users = await getUsersCollection();
     const existingUser = await users.findOne({ email });
 
     if (existingUser) {
-      return res.status(409).json({ error: "An account with this email already exists" });
+      return res
+        .status(409)
+        .json({ error: "An account with this email already exists" });
     }
 
     const now = new Date().toISOString();
@@ -79,9 +70,9 @@ export const signup = async (req, res) => {
       createdAt: now,
     };
 
-    issueSession(res, user);
+    const accessToken = issueAuthTokens(res, user);
 
-    return res.status(201).json({ user: publicUser(user) });
+    return res.status(201).json({ user: publicUser(user), accessToken });
   } catch (error) {
     console.error("Signup error:", error);
     return res.status(500).json({ error: error.message });
@@ -107,9 +98,9 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    issueSession(res, user);
+    const accessToken = issueAuthTokens(res, user);
 
-    return res.json({ user: publicUser(user) });
+    return res.json({ user: publicUser(user), accessToken });
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({ error: error.message });
@@ -117,9 +108,34 @@ export const login = async (req, res) => {
 };
 
 export const logout = (_req, res) => {
-  res.clearCookie(authCookieName, baseCookieOptions());
+  res.clearCookie(
+    REFRESH_TOKEN_COOKIE_NAME,
+    clearRefreshTokenCookieOptions(),
+  );
 
   return res.json({ message: "Logged out" });
+};
+
+export const refresh = async (req, res) => {
+  try {
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
+
+    if (!token) {
+      return res.status(401).json({ error: "Refresh token required" });
+    }
+
+    const payload = verifyToken(token);
+
+    if (payload.type !== "refresh" || !ObjectId.isValid(payload.userId)) {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
+    const accessToken = issueAccessToken(payload.userId);
+
+    return res.json({ accessToken });
+  } catch (_error) {
+    return res.status(401).json({ error: "Invalid refresh token" });
+  }
 };
 
 export const me = (req, res) => {
@@ -135,7 +151,9 @@ export const forgotPassword = async (req, res) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const resetTokenExpiry = new Date(
+      Date.now() + 60 * 60 * 1000,
+    ).toISOString();
     const users = await getUsersCollection();
 
     await users.updateOne(
