@@ -32,7 +32,7 @@ export const getChats = async (_req, res) => {
   try {
     const collection = await getChatsCollection();
     const storedChats = await collection
-      .find({})
+      .find({ userId: _req.user.id })
       .sort({ updatedAt: -1 })
       .toArray();
 
@@ -56,6 +56,7 @@ export const createChat = async (req, res) => {
     const now = new Date().toISOString();
     const chatId = req.body.id || crypto.randomUUID();
     const chat = {
+      userId: req.user.id,
       id: chatId,
       title: req.body.title || "PDF Chat",
       fileName: req.body.fileName || "Document.pdf",
@@ -103,7 +104,7 @@ export const updateChat = async (req, res) => {
 
     const collection = await getChatsCollection();
     const result = await collection.findOneAndUpdate(
-      { id: req.params.chatId },
+      { id: req.params.chatId, userId: req.user.id },
       { $set: updates },
       { returnDocument: "after" },
     );
@@ -125,7 +126,7 @@ export const saveMessages = async (req, res) => {
     const now = new Date().toISOString();
     const collection = await getChatsCollection();
     const result = await collection.findOneAndUpdate(
-      { id: req.params.chatId },
+      { id: req.params.chatId, userId: req.user.id },
       {
         $set: {
           messages,
@@ -278,6 +279,9 @@ export const deleteChat = async (req, res) => {
       req.body.collectionName || collectionNameFromChatId(req.params.chatId);
     const chatsCollection = await getChatsCollection();
     const storedChat = await chatsCollection.findOne({ id: req.params.chatId });
+    if (!storedChat || storedChat.userId !== req.user.id) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
     const qdrantClient = new QdrantClient({ url: process.env.VECTOR_URL });
 
     const collectionExists =
@@ -301,7 +305,7 @@ export const deleteChat = async (req, res) => {
     await deletePdfFromCloudinary(
       req.body.cloudinaryPublicId || storedChat?.cloudinaryPublicId,
     );
-    await chatsCollection.deleteOne({ id: req.params.chatId });
+    await chatsCollection.deleteOne({ id: req.params.chatId, userId: req.user.id });
 
     return res.json({
       message: "Chat, uploaded PDF, cloud file, and vector collection deleted",

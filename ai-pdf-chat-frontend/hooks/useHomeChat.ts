@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChatMessage } from "@/components/MainChatContainer";
 import { ChatSession } from "@/components/ChatHistory";
+import { apiRequest } from "@/lib/authClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 type MessagesByChat = Record<string, ChatMessage[]>;
 export type StoredChatsResponse = {
@@ -35,17 +34,7 @@ const createChatTitle = (fileName: string) =>
     .trim() || "PDF Chat";
 
 export const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  return response.json();
+  return apiRequest<T>(path, init);
 };
 
 export function useHomeChat() {
@@ -55,34 +44,30 @@ export function useHomeChat() {
     queryFn: () => requestJson<StoredChatsResponse>("/chats"),
     staleTime: 1000 * 60 * 5,
   });
-  const chats = data?.chats ?? [];
-  const messagesByChat = data?.messagesByChat ?? {};
+  const chats = useMemo(() => data?.chats ?? [], [data?.chats]);
+  const messagesByChat = useMemo(
+    () => data?.messagesByChat ?? {},
+    [data?.messagesByChat],
+  );
   const [activeChatId, setActiveChatId] = useState<string | null>(()=> null);
-  
-
-  // Fetching chat data 
-  useEffect(() => {
-    if(chats.length > 0 && activeChatId === null) {
-      setActiveChatId(chats[0].id);
-    }
-  }, [chats, activeChatId]);
+  const selectedChatId = activeChatId ?? chats[0]?.id ?? null;
 
   const activeChat = useMemo(
-    () => chats.find((chat) => chat.id === activeChatId) ?? null,
-    [activeChatId, chats],
+    () => chats.find((chat) => chat.id === selectedChatId) ?? null,
+    [selectedChatId, chats],
   );
 
-  const activeMessages = activeChatId
-    ? (messagesByChat[activeChatId] ?? [])
+  const activeMessages = selectedChatId
+    ? (messagesByChat[selectedChatId] ?? [])
     : [];
 
   const referenceCollectionNames = useMemo(
     () =>
       chats
-        .filter((chat) => chat.id !== activeChatId)
+        .filter((chat) => chat.id !== selectedChatId)
         .slice(0, 3)
         .map((chat) => chat.collectionName),
-    [activeChatId, chats],
+    [selectedChatId, chats],
   );
 
   const handleUploadStart = (file: File) => {
@@ -210,7 +195,7 @@ export function useHomeChat() {
     chats,
     activeChat,
     activeMessages,
-    activeChatId,
+    activeChatId: selectedChatId,
     deletingChatId: deleteChatMutation.isPending ? deleteChatMutation.variables?.id : null,
     referenceCollectionNames,
     setActiveChatId,

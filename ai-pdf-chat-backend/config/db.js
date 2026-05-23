@@ -21,3 +21,10 @@ export const getChatsCollection = async () => {
   const database = await getDb();
   return database.collection("chats");
 };
+
+export const getUsersCollection = async () => {
+  const database = await getDb();
+  const collection = database.collection("users");
+  await collection.createIndex({ email: 1 }, { unique: true });
+  return collection;
+};

@@ -9,8 +9,11 @@ import {
   uploadPdf,
 } from "../controllers/chatController.js";
 import upload from "../config/multer.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 router.get("/chats", getChats);
 router.post("/chats", createChat);

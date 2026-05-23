@@ -8,6 +8,11 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  authRequest,
+  publicAuthRequest,
+  setAccessToken,
+} from "@/lib/authClient";
 
 type User = {
   id: string;
@@ -25,29 +30,12 @@ type AuthContextValue = {
   forgotPassword: (email: string) => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-const AUTH_BASE_URL = BACKEND_URL.replace(/\/api\/?$/, "");
-
-const authRequest = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${AUTH_BASE_URL}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    ...init,
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}`);
-  }
-
-  return data;
+type AuthResponse = {
+  user: User;
+  accessToken: string;
 };
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -71,28 +59,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await authRequest<{ user: User }>("/auth/login", {
+    const data = await publicAuthRequest<AuthResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    setAccessToken(data.accessToken);
     setUser(data.user);
   }, []);
 
   const signup = useCallback(async (email: string, password: string) => {
-    const data = await authRequest<{ user: User }>("/auth/signup", {
+    const data = await publicAuthRequest<AuthResponse>("/auth/signup", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    setAccessToken(data.accessToken);
     setUser(data.user);
   }, []);
 
   const logout = useCallback(async () => {
-    await authRequest("/auth/logout", { method: "POST" });
+    await publicAuthRequest("/auth/logout", { method: "POST" });
+    setAccessToken(null);
     setUser(null);
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {
-    await authRequest("/auth/forgot-password", {
+    await publicAuthRequest("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
     });

@@ -1,9 +1,25 @@
 import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/authClient";
 
 type UploadPdfInput = {
   file: File;
   chatId: string;
   collectionName: string;
+};
+
+type UploadPdfResponse = {
+  message: string;
+  chatId: string;
+  collectionName: string;
+  file: {
+    filename: string;
+    originalName: string;
+    path: string;
+    url?: string;
+    cloudinaryPublicId?: string;
+    size: number;
+    mimetype: string;
+  };
 };
 
 const uploadPdf = async ({ file, chatId, collectionName }: UploadPdfInput) => {
@@ -12,17 +28,10 @@ const uploadPdf = async ({ file, chatId, collectionName }: UploadPdfInput) => {
   formData.append("chatId", chatId);
   formData.append("collectionName", collectionName);
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/upload`, {
+  return apiRequest<UploadPdfResponse>("/upload", {
     method: "POST",
-    credentials: "include",
     body: formData,
   });
-
-  if (!response.ok) {
-    throw new Error("Upload failed");
-  }
-
-  return response.json();
 };
 
 export const useUpload = () => {

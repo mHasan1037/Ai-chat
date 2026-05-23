@@ -1,4 +1,5 @@
 import { ChatApiResponse } from "@/components/MainChatContainer";
+import { apiRequest } from "@/lib/authClient";
 import { useMutation } from "@tanstack/react-query";
 
 type ChatWithAiInput = {
@@ -21,16 +22,9 @@ const chatWithAi = async ({
     params.set("references", referenceCollectionNames.join(","));
   }
 
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat?${params.toString()}`,
-    { method: "GET", credentials: "include" },
-  );
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+  return apiRequest<ChatApiResponse>(`/chat?${params.toString()}`, {
+    method: "GET",
+  });
 };
 
 export const useAIChat = () => {
