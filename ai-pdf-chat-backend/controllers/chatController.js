@@ -9,7 +9,6 @@ import {
 } from "../utils/helpers.js";
 import {
   deletePdfFromCloudinary,
-  uploadPdfToCloudinary,
 } from "../config/cloudinary.js";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { QdrantVectorStore } from "@langchain/qdrant";
@@ -25,7 +24,25 @@ const getRelevantDocs = async (embeddings, collectionName, query, k) => {
     },
   );
   const retriever = vectorStore.asRetriever({ k });
-  return retriever.invoke(query);
+  // Use the retriever's document retrieval API to get matching documents
+  // `getRelevantDocuments` returns an array of `Document` objects.
+  if (typeof retriever.getRelevantDocuments === "function") {
+    return retriever.getRelevantDocuments(query);
+  }
+
+  // Fallback for retrievers that implement `retrieve`.
+  if (typeof retriever.retrieve === "function") {
+    return retriever.retrieve(query);
+  }
+
+  // As a last resort, attempt invoke and ensure we return an array
+  try {
+    const invoked = await retriever.invoke?.(query);
+    return Array.isArray(invoked) ? invoked : [];
+  } catch (e) {
+    console.error("Retriever invocation failed:", e);
+    return [];
+  }
 };
 
 export const getChats = async (_req, res) => {
@@ -55,6 +72,7 @@ export const createChat = async (req, res) => {
   try {
     const now = new Date().toISOString();
     const chatId = req.body.id || crypto.randomUUID();
+    const messages = normalizeMessages(req.body.messages);
     const chat = {
       userId: req.user.id,
       id: chatId,
@@ -67,18 +85,37 @@ export const createChat = async (req, res) => {
         req.body.collectionName || collectionNameFromChatId(chatId),
       createdAt: req.body.createdAt || now,
       updatedAt: req.body.updatedAt || now,
-      messageCount: req.body.messageCount ?? 0,
-      messages: normalizeMessages(req.body.messages),
+      messageCount: req.body.messageCount ?? messages.length,
+      messages,
     };
 
     const collection = await getChatsCollection();
-    await collection.updateOne(
-      { id: chat.id },
-      { $setOnInsert: chat },
-      { upsert: true },
+    const result = await collection.findOneAndUpdate(
+      { id: chat.id, userId: req.user.id },
+      {
+        $setOnInsert: {
+          userId: req.user.id,
+          id: chatId,
+          createdAt: chat.createdAt,
+          messages: chat.messages,
+          messageCount: chat.messageCount,
+        },
+        $set: {
+          title: chat.title,
+          fileName: chat.fileName,
+          filePath: chat.filePath,
+          collectionName: chat.collectionName,
+          updatedAt: chat.updatedAt,
+          ...(chat.fileUrl != null ? { fileUrl: chat.fileUrl } : {}),
+          ...(chat.cloudinaryPublicId != null
+            ? { cloudinaryPublicId: chat.cloudinaryPublicId }
+            : {}),
+        },
+      },
+      { upsert: true, returnDocument: "after" },
     );
 
-    return res.status(201).json({ chat: serializeChat(chat) });
+    return res.status(201).json({ chat: serializeChat(result) });
   } catch (error) {
     console.error("Create chat error:", error);
     return res.status(500).json({ error: error.message });
@@ -93,6 +130,8 @@ export const updateChat = async (req, res) => {
       "filePath",
       "fileUrl",
       "cloudinaryPublicId",
+      "uploadStatus",
+      "cloudinaryStatus",
       "collectionName",
       "updatedAt",
       "messageCount",
@@ -128,18 +167,26 @@ export const saveMessages = async (req, res) => {
     const result = await collection.findOneAndUpdate(
       { id: req.params.chatId, userId: req.user.id },
       {
+        $setOnInsert: {
+          id: req.params.chatId,
+          userId: req.user.id,
+          title: req.body.title || "PDF Chat",
+          fileName: req.body.fileName || "Document.pdf",
+          filePath: req.body.filePath,
+          fileUrl: req.body.fileUrl,
+          cloudinaryPublicId: req.body.cloudinaryPublicId,
+          collectionName:
+            req.body.collectionName || collectionNameFromChatId(req.params.chatId),
+          createdAt: req.body.createdAt || now,
+        },
         $set: {
           messages,
           messageCount: messages.length,
           updatedAt: req.body.updatedAt || now,
         },
       },
-      { returnDocument: "after" },
+      { upsert: true, returnDocument: "after" },
     );
-
-    if (!result) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
 
     return res.json({
       chat: serializeChat(result),
@@ -156,31 +203,34 @@ export const uploadPdf = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-
     const chatId = req.body.chatId || crypto.randomUUID();
     const collectionName =
       req.body.collectionName || collectionNameFromChatId(chatId);
-    const cloudinaryFile = await uploadPdfToCloudinary(req.file.path, chatId);
-
-    await queue.add("file-ready", {
+    const job = await queue.add("file-ready", {
       chatId,
+      userId: req.user.id,
       filename: req.file.filename,
       originalName: req.file.originalname,
       destination: req.file.destination,
       path: req.file.path,
       collectionName,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
     });
 
     res.json({
       message: "PDF uploaded and queued for processing",
       chatId,
       collectionName,
+      jobId: job.id,
       file: {
         filename: req.file.filename,
         originalName: req.file.originalname,
         path: req.file.path,
-        url: cloudinaryFile?.secure_url,
-        cloudinaryPublicId: cloudinaryFile?.public_id,
+        url: null,
+        cloudinaryPublicId: null,
+        uploadStatus: "queued",
+        cloudinaryStatus: "queued",
         size: req.file.size,
         mimetype: req.file.mimetype,
       },

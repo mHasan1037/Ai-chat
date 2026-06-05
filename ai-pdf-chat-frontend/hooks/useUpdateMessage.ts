@@ -1,9 +1,11 @@
-import { ChatMessage } from "@/components/MainChatContainer";
+import type { ChatSession } from "@/components/ChatHistory";
+import type { ChatMessage } from "@/components/MainChatContainer";
 import { useQueryClient } from "@tanstack/react-query";
 import { requestJson, StoredChatsResponse } from "./useHomeChat";
 
-export const useUpdateMessages = (activeChatId: string | null) => {
+export const useUpdateMessages = (activeChat: ChatSession | null) => {
   const queryClient = useQueryClient();
+  const activeChatId = activeChat?.id ?? null;
 
   return (messages: ChatMessage[]) => {
     if (!activeChatId) return;
@@ -25,7 +27,11 @@ export const useUpdateMessages = (activeChatId: string | null) => {
 
     void requestJson(`/chats/${activeChatId}/messages`, {
       method: "PUT",
-      body: JSON.stringify({ messages, updatedAt: now }),
+      body: JSON.stringify({
+        ...activeChat,
+        messages,
+        updatedAt: now,
+      }),
     }).catch((error) => {
       console.error("Could not update messages for chat:", error);
     });
