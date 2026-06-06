@@ -186,9 +186,7 @@ Response streamed back to user
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/upload` | Upload a PDF file |
-| `GET` | `/api/jobs/:id` | Check processing job status |
 | `POST` | `/api/chat` | Send a message and receive an answer |
-| `GET` | `/api/health` | Health check |
 
 ---
 
