@@ -16,7 +16,7 @@ export default function Home() {
     activeMessages,
     activeChatId,
     deletingChatId,
-    referenceCollectionNames,
+    referenceChatIds,
     setActiveChatId,
     handleUploadStart,
     handleUploadSuccess,
@@ -65,7 +65,7 @@ export default function Home() {
         <MainChatContainer
           activeChat={activeChat}
           messages={activeMessages}
-          referenceCollectionNames={referenceCollectionNames}
+          referenceChatIds={referenceChatIds}
         />
       </div>
     </div>

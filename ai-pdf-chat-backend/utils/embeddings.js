@@ -13,7 +13,7 @@ export const llm = new ChatOllama({
   temperature: 0,
 });
 
-export const queue = new Queue("file-upload-queue", {
+export const pdfEmbeddingQueue = new Queue("file-upload-queue", {
   connection: {
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT),

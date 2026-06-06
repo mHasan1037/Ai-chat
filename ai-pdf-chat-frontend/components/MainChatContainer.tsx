@@ -35,13 +35,13 @@ export type ChatApiResponse = {
 type Props = {
   activeChat: ChatSession | null;
   messages: ChatMessage[];
-  referenceCollectionNames: string[];
+  referenceChatIds: string[];
 };
 
 const MainChatContainer = ({
   activeChat,
   messages,
-  referenceCollectionNames,
+  referenceChatIds,
 }: Props) => {
   const updateMessages = useUpdateMessages(activeChat);
   const chatWithAiMutation = useAIChat();
@@ -58,8 +58,8 @@ const MainChatContainer = ({
     chatWithAiMutation.mutate(
       {
         input: chat,
-        collectionName: activeChat.collectionName,
-        referenceCollectionNames,
+        chatId: activeChat.id,
+        referenceChatIds,
       },
       {
         onSuccess: (data) => {

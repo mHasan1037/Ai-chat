@@ -1,3 +1,5 @@
+export const GLOBAL_COLLECTION_NAME = "user_documents";
+
 export const collectionNameFromChatId = (chatId) =>
   `chat_${chatId.replace(/[^a-zA-Z0-9_]/g, "_")}`;
 

@@ -4,22 +4,22 @@ import { useMutation } from "@tanstack/react-query";
 
 type ChatWithAiInput = {
   input: string;
-  collectionName: string;
-  referenceCollectionNames?: string[];
+  chatId: string;
+  referenceChatIds?: string[];
 };
 
 const chatWithAi = async ({
   input,
-  collectionName,
-  referenceCollectionNames = [],
+  chatId,
+  referenceChatIds = [],
 }: ChatWithAiInput): Promise<ChatApiResponse> => {
   const params = new URLSearchParams({
     query: input,
-    collection: collectionName,
+    chatId,
   });
 
-  if (referenceCollectionNames.length > 0) {
-    params.set("references", referenceCollectionNames.join(","));
+  if (referenceChatIds.length > 0) {
+    params.set("references", referenceChatIds.join(","));
   }
 
   return apiRequest<ChatApiResponse>(`/chat?${params.toString()}`, {

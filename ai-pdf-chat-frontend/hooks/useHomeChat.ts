@@ -24,8 +24,7 @@ type FileUploadProps = {
   };
 };
 
-const createCollectionName = (chatId: string) =>
-  `chat_${chatId.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+const GLOBAL_COLLECTION_NAME = "user_documents";
 
 const createChatTitle = (fileName: string) =>
   fileName
@@ -61,19 +60,19 @@ export function useHomeChat() {
     ? (messagesByChat[selectedChatId] ?? [])
     : [];
 
-  const referenceCollectionNames = useMemo(
+  const referenceChatIds = useMemo(
     () =>
       chats
         .filter((chat) => chat.id !== selectedChatId)
         .slice(0, 3)
-        .map((chat) => chat.collectionName),
+        .map((chat) => chat.id),
     [selectedChatId, chats],
   );
 
   const handleUploadStart = (file: File) => {
     const now = new Date().toISOString();
     const chatId = crypto.randomUUID();
-    const collectionName = createCollectionName(chatId);
+    const collectionName = GLOBAL_COLLECTION_NAME;
     const chat: ChatSession = {
       id: chatId,
       title: createChatTitle(file.name),
@@ -197,7 +196,7 @@ export function useHomeChat() {
     activeMessages,
     activeChatId: selectedChatId,
     deletingChatId: deleteChatMutation.isPending ? deleteChatMutation.variables?.id : null,
-    referenceCollectionNames,
+    referenceChatIds,
     setActiveChatId,
     handleUploadStart,
     handleUploadSuccess,

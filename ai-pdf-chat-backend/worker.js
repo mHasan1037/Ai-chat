@@ -9,6 +9,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { uploadPdfToCloudinary } from "./config/cloudinary.js";
 import { getChatsCollection } from "./config/db.js";
 import { getEmbeddings } from "./utils/embeddings.js";
+import { GLOBAL_COLLECTION_NAME } from "./utils/helpers.js";
 
 dotenv.config();
 
@@ -23,10 +24,10 @@ const worker = new Worker(
       userId,
       filename,
       originalName,
-      collectionName = "documents",
       size,
       mimetype,
     } = job.data;
+    const targetCollectionName = GLOBAL_COLLECTION_NAME;
 
     try {
       const chatsCollection = await getChatsCollection();
@@ -46,7 +47,7 @@ const worker = new Worker(
           $set: {
             fileName,
             filePath: path,
-            collectionName,
+            collectionName: targetCollectionName,
             fileSize: size,
             mimeType: mimetype,
             uploadStatus: "processing",
@@ -105,10 +106,11 @@ const worker = new Worker(
           pageContent: fullText,
           metadata: {
             source: path,
+            userId,
             chatId,
             filename,
             originalName,
-            collectionName,
+            collectionName: targetCollectionName,
           },
         }),
       ];
@@ -118,13 +120,20 @@ const worker = new Worker(
         chunkOverlap: 100,
       });
       const splitDocs = await splitter.splitDocuments(docs);
+      splitDocs.forEach((doc) => {
+        doc.metadata = {
+          ...doc.metadata,
+          chatId,
+          userId,
+        };
+      });
 
       const embeddings = getEmbeddings();
 
       // Create collection with documents (will create if doesn't exist)
       await QdrantVectorStore.fromDocuments(splitDocs, embeddings, {
         url: process.env.VECTOR_URL,
-        collectionName,
+        collectionName: targetCollectionName,
       });
 
       await chatsCollection.updateOne(

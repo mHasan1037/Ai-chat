@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { getChatsCollection } from "../config/db.js";
 import {
-  collectionNameFromChatId,
+  GLOBAL_COLLECTION_NAME,
   normalizeMessages,
   serializeChat,
   systemPropmptFunc,
@@ -13,9 +13,40 @@ import {
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import crypto from "crypto";
-import { getEmbeddings, llm, queue } from "../utils/embeddings.js";
+import { getEmbeddings, llm, pdfEmbeddingQueue } from "../utils/embeddings.js";
 
-const getRelevantDocs = async (embeddings, collectionName, query, k) => {
+const buildDocumentFilter = ({ chatId, userId } = {}) => {
+  const must = [];
+
+  if (chatId) {
+    must.push({
+      key: "metadata.chatId",
+      match: { value: chatId },
+    });
+  }
+
+  if (userId) {
+    must.push({
+      key: "metadata.userId",
+      match: { value: userId },
+    });
+  }
+
+  return must.length > 0 ? { must } : undefined;
+};
+
+const queryValueToString = (value) => {
+  if (Array.isArray(value)) return value[0] || "";
+  return typeof value === "string" ? value : "";
+};
+
+const getRelevantDocs = async (
+  embeddings,
+  collectionName,
+  query,
+  k,
+  filterOptions = {},
+) => {
   const vectorStore = await QdrantVectorStore.fromExistingCollection(
     embeddings,
     {
@@ -23,7 +54,8 @@ const getRelevantDocs = async (embeddings, collectionName, query, k) => {
       collectionName,
     },
   );
-  const retriever = vectorStore.asRetriever({ k });
+  const filter = buildDocumentFilter(filterOptions);
+  const retriever = vectorStore.asRetriever({ k, filter });
   // Use the retriever's document retrieval API to get matching documents
   // `getRelevantDocuments` returns an array of `Document` objects.
   if (typeof retriever.getRelevantDocuments === "function") {
@@ -81,8 +113,7 @@ export const createChat = async (req, res) => {
       filePath: req.body.filePath,
       fileUrl: req.body.fileUrl,
       cloudinaryPublicId: req.body.cloudinaryPublicId,
-      collectionName:
-        req.body.collectionName || collectionNameFromChatId(chatId),
+      collectionName: GLOBAL_COLLECTION_NAME,
       createdAt: req.body.createdAt || now,
       updatedAt: req.body.updatedAt || now,
       messageCount: req.body.messageCount ?? messages.length,
@@ -132,7 +163,6 @@ export const updateChat = async (req, res) => {
       "cloudinaryPublicId",
       "uploadStatus",
       "cloudinaryStatus",
-      "collectionName",
       "updatedAt",
       "messageCount",
     ];
@@ -175,8 +205,7 @@ export const saveMessages = async (req, res) => {
           filePath: req.body.filePath,
           fileUrl: req.body.fileUrl,
           cloudinaryPublicId: req.body.cloudinaryPublicId,
-          collectionName:
-            req.body.collectionName || collectionNameFromChatId(req.params.chatId),
+          collectionName: GLOBAL_COLLECTION_NAME,
           createdAt: req.body.createdAt || now,
         },
         $set: {
@@ -204,9 +233,8 @@ export const uploadPdf = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
     const chatId = req.body.chatId || crypto.randomUUID();
-    const collectionName =
-      req.body.collectionName || collectionNameFromChatId(chatId);
-    const job = await queue.add("file-ready", {
+    const collectionName = GLOBAL_COLLECTION_NAME;
+    const job = await pdfEmbeddingQueue.add("file-ready", {
       chatId,
       userId: req.user.id,
       filename: req.file.filename,
@@ -246,11 +274,12 @@ export const uploadPdf = async (req, res) => {
 
 export const chatWithPdf = async (req, res) => {
   try {
-    const userQuery = (req.query.query || "").trim();
-    const collectionName = req.query.collection || "documents";
-    const referenceCollections = (req.query.references || "")
+     console.log("chat id", req.query)
+    const userQuery = queryValueToString(req.query.query).trim();
+    const currentChatId = queryValueToString(req.query.chatId).trim();
+    const referenceChatIds = queryValueToString(req.query.references)
       .split(",")
-      .map((collection) => collection.trim())
+      .map((chatId) => chatId.trim())
       .filter(Boolean)
       .slice(0, 3);
 
@@ -258,28 +287,34 @@ export const chatWithPdf = async (req, res) => {
       return res.status(400).json({ error: "Missing query" });
     }
 
+    if (!currentChatId) {
+      return res.status(400).json({ error: "Missing chatId" });
+    }
+
     const embeddings = getEmbeddings();
     const primaryDocs = await getRelevantDocs(
       embeddings,
-      collectionName,
+      GLOBAL_COLLECTION_NAME,
       userQuery,
       4,
+      { chatId: currentChatId, userId: req.user.id },
     );
 
     const referenceDocGroups = await Promise.all(
-      referenceCollections.map(async (referenceCollection) => {
+      referenceChatIds.map(async (referenceChatId) => {
         const docs = await getRelevantDocs(
           embeddings,
-          referenceCollection,
+          GLOBAL_COLLECTION_NAME,
           userQuery,
           1,
+          { chatId: referenceChatId, userId: req.user.id },
         );
 
         return docs.map((doc) => ({
           ...doc,
           metadata: {
             ...doc.metadata,
-            referencedCollection: referenceCollection,
+            referencedChatId: referenceChatId,
           },
         }));
       }),
@@ -290,7 +325,7 @@ export const chatWithPdf = async (req, res) => {
 
     if (docs.length === 0) {
       return res.status(404).json({
-        error: "No documents found. Check collection name and embedding model.",
+        error: "No documents found. Check chatId, user access, and embedding model.",
       });
     }
 
@@ -325,8 +360,7 @@ export const chatWithPdf = async (req, res) => {
 
 export const deleteChat = async (req, res) => {
   try {
-    const collectionName =
-      req.body.collectionName || collectionNameFromChatId(req.params.chatId);
+    const collectionName = GLOBAL_COLLECTION_NAME;
     const chatsCollection = await getChatsCollection();
     const storedChat = await chatsCollection.findOne({ id: req.params.chatId });
     if (!storedChat || storedChat.userId !== req.user.id) {
@@ -337,7 +371,12 @@ export const deleteChat = async (req, res) => {
     const collectionExists =
       await qdrantClient.collectionExists(collectionName);
     if (collectionExists.exists) {
-      await qdrantClient.deleteCollection(collectionName);
+      await qdrantClient.delete(collectionName, {
+        filter: buildDocumentFilter({
+          chatId: req.params.chatId,
+          userId: req.user.id,
+        }),
+      });
     }
 
     if (req.body.filePath) {
@@ -358,7 +397,7 @@ export const deleteChat = async (req, res) => {
     await chatsCollection.deleteOne({ id: req.params.chatId, userId: req.user.id });
 
     return res.json({
-      message: "Chat, uploaded PDF, cloud file, and vector collection deleted",
+      message: "Chat, uploaded PDF, cloud file, and document vectors deleted",
       collectionName,
     });
   } catch (error) {
