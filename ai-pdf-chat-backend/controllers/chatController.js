@@ -5,7 +5,7 @@ import {
   GLOBAL_COLLECTION_NAME,
   normalizeMessages,
   serializeChat,
-  systemPropmptFunc,
+  systemPromptFunc,
 } from "../utils/helpers.js";
 import {
   deletePdfFromCloudinary,
@@ -337,7 +337,7 @@ export const chatWithPdf = async (req, res) => {
       .map((doc, i) => `[Reference ${i + 1}] ${doc.pageContent}`)
       .join("\n\n");
 
-    const systemPrompt = systemPropmptFunc(primaryContext, referenceContext);
+    const systemPrompt = systemPromptFunc(primaryContext, referenceContext);
 
     const response = await llm.invoke([
       { role: "system", content: systemPrompt },

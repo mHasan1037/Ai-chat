@@ -1,6 +1,7 @@
 import React from "react";
 import { ChatMessage } from "./MainChatContainer";
 import { useTheme } from "@/context/ThemeContext";
+import ReactMarkdown from "react-markdown";
 
 type Props = {
   messages: ChatMessage[];
@@ -47,7 +48,7 @@ const AllChats = ({ messages, isLoading }: Props) => {
                   : "bg-white/80 border border-black/10 text-gray-700 rounded-bl-sm backdrop-blur-sm shadow-sm"
             }`}
           >
-            <p>{msg.content}</p>
+            {msg.role === "user" ? (<p>{msg.content}</p>) : (<ReactMarkdown>{msg.content}</ReactMarkdown>)}
           </div>
         </div>
       ))}

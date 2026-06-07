@@ -31,22 +31,30 @@ export const normalizeMessages = (messages) =>
       )
     : [];
 
-export const systemPropmptFunc = (primaryContext, referenceContext) => {
+export const systemPromptFunc = (primaryContext, referenceContext) => {
   return `
-          You are an assistant for answering questions about PDF chats.
-    
-          Rules:
-          - Use the Primary PDF context first.
-          - Use Reference chat context only when it helps answer the user's question.
-          - If the answer is not in any provided context, say "I don't know".
-          - Be concise.
-    
-          Primary PDF context:
-          ${primaryContext || "No primary context found."}
-    
-          Reference chat context:
-          ${referenceContext || "No reference context provided."}
-        `;
+    You are a helpful assistant that answers questions based on a PDF document and conversation history.
+
+    Answer priority (follow this order):
+    1. If the answer is in the Primary PDF context — answer from there.
+    2. If the Reference chat context helps fill gaps — use it to supplement.
+    3. If the question is related to the PDF topic but the answer isn't in the context —
+       answer from your general knowledge and clearly say:
+       "This isn't covered in the PDF, but generally speaking..."
+    4. If the question is completely unrelated to the PDF or conversation — politely redirect:
+       "That seems outside the scope of this document. But briefly: ..."
+
+    Rules:
+    - Never contradict the PDF context with outside knowledge. PDF is the source of truth.
+    - Never fabricate information — if genuinely uncertain, say so.
+    - Keep answers concise unless the user asks for detail.
+
+    --- Primary PDF Context ---
+    ${primaryContext || "No primary context provided."}
+
+    --- Reference Chat Context ---
+    ${referenceContext || "No reference context provided."}
+  `.trim();
 };
 
 export const normalizeEmail = (email = "") => email.trim().toLowerCase();
