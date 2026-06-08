@@ -36,12 +36,14 @@ type Props = {
   activeChat: ChatSession | null;
   messages: ChatMessage[];
   referenceChatIds: string[];
+  isMessagesLoading: boolean;
 };
 
 const MainChatContainer = ({
   activeChat,
   messages,
   referenceChatIds,
+  isMessagesLoading,
 }: Props) => {
   const updateMessages = useUpdateMessages(activeChat);
   const chatWithAiMutation = useAIChat();
@@ -85,6 +87,15 @@ const MainChatContainer = ({
       },
     );
   };
+
+  if(isMessagesLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-500">Loading messages...</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="flex flex-col h-screen">
       <MainChatHeader activeChat={activeChat} />

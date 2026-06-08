@@ -1,7 +1,11 @@
 import type { ChatSession } from "@/components/ChatHistory";
 import type { ChatMessage } from "@/components/MainChatContainer";
 import { useQueryClient } from "@tanstack/react-query";
-import { requestJson, StoredChatsResponse } from "./useHomeChat";
+import {
+  ChatMessagesResponse,
+  requestJson,
+  StoredChatsResponse,
+} from "./useHomeChat";
 
 export const useUpdateMessages = (activeChat: ChatSession | null) => {
   const queryClient = useQueryClient();
@@ -15,14 +19,16 @@ export const useUpdateMessages = (activeChat: ChatSession | null) => {
     queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => {
       if (!prev) return prev;
       return {
-        ...prev,
         chats: prev.chats.map((chat) =>
           chat.id === activeChatId
             ? { ...chat, updatedAt: now, messageCount: messages.length }
             : chat,
         ),
-        messagesByChat: { ...prev.messagesByChat, [activeChatId]: messages },
       };
+    });
+
+    queryClient.setQueryData<ChatMessagesResponse>(["messages", activeChatId], {
+      messages,
     });
 
     void requestJson(`/chats/${activeChatId}/messages`, {

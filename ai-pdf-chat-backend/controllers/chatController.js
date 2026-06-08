@@ -7,9 +7,7 @@ import {
   serializeChat,
   systemPromptFunc,
 } from "../utils/helpers.js";
-import {
-  deletePdfFromCloudinary,
-} from "../config/cloudinary.js";
+import { deletePdfFromCloudinary } from "../config/cloudinary.js";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import crypto from "crypto";
@@ -83,19 +81,31 @@ export const getChats = async (_req, res) => {
     const storedChats = await collection
       .find({ userId: _req.user.id })
       .sort({ updatedAt: -1 })
+      .project({ messages: 0 })
       .toArray();
 
-    const messagesByChat = storedChats.reduce((acc, chat) => {
-      acc[chat.id] = normalizeMessages(chat.messages);
-      return acc;
-    }, {});
-
     return res.json({
-      chats: storedChats.map(serializeChat),
-      messagesByChat,
+      chats: storedChats.map(serializeChat)
     });
   } catch (error) {
     console.error("Load chats error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getChatMessages = async (req, res) => {
+  try {
+    const collection = await getChatsCollection();
+    const chat = await collection.findOne(
+      { id: req.params.chatId, userId: req.user.id },
+      { projection: { messages: 1 } },
+    );
+    if (!chat) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    return res.json({ messages: normalizeMessages(chat.messages) });
+  } catch (error) {
+    console.error("Get chat messages error:", error);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -274,7 +284,6 @@ export const uploadPdf = async (req, res) => {
 
 export const chatWithPdf = async (req, res) => {
   try {
-     console.log("chat id", req.query)
     const userQuery = queryValueToString(req.query.query).trim();
     const currentChatId = queryValueToString(req.query.chatId).trim();
     const referenceChatIds = queryValueToString(req.query.references)
@@ -325,7 +334,8 @@ export const chatWithPdf = async (req, res) => {
 
     if (docs.length === 0) {
       return res.status(404).json({
-        error: "No documents found. Check chatId, user access, and embedding model.",
+        error:
+          "No documents found. Check chatId, user access, and embedding model.",
       });
     }
 
@@ -394,7 +404,10 @@ export const deleteChat = async (req, res) => {
     await deletePdfFromCloudinary(
       req.body.cloudinaryPublicId || storedChat?.cloudinaryPublicId,
     );
-    await chatsCollection.deleteOne({ id: req.params.chatId, userId: req.user.id });
+    await chatsCollection.deleteOne({
+      id: req.params.chatId,
+      userId: req.user.id,
+    });
 
     return res.json({
       message: "Chat, uploaded PDF, cloud file, and document vectors deleted",
