@@ -14,6 +14,7 @@ export default function Home() {
     chats,
     activeChat,
     activeMessages,
+    isMessagesLoading,
     activeChatId,
     deletingChatId,
     referenceChatIds,
@@ -66,6 +67,7 @@ export default function Home() {
           activeChat={activeChat}
           messages={activeMessages}
           referenceChatIds={referenceChatIds}
+          isMessagesLoading={isMessagesLoading}
         />
       </div>
     </div>

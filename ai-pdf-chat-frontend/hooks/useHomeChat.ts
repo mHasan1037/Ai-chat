@@ -4,10 +4,12 @@ import { ChatSession } from "@/components/ChatHistory";
 import { apiRequest } from "@/lib/authClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-type MessagesByChat = Record<string, ChatMessage[]>;
+export type ChatMessagesResponse = {
+  messages: ChatMessage[];
+};
+
 export type StoredChatsResponse = {
   chats: ChatSession[];
-  messagesByChat: MessagesByChat;
 };
 
 type FileUploadProps = {
@@ -44,10 +46,6 @@ export function useHomeChat() {
     staleTime: 1000 * 60 * 5,
   });
   const chats = useMemo(() => data?.chats ?? [], [data?.chats]);
-  const messagesByChat = useMemo(
-    () => data?.messagesByChat ?? {},
-    [data?.messagesByChat],
-  );
   const [activeChatId, setActiveChatId] = useState<string | null>(()=> null);
   const selectedChatId = activeChatId ?? chats[0]?.id ?? null;
 
@@ -56,9 +54,14 @@ export function useHomeChat() {
     [selectedChatId, chats],
   );
 
-  const activeMessages = selectedChatId
-    ? (messagesByChat[selectedChatId] ?? [])
-    : [];
+  const {data: messagseData, isLoading: isMessagesLoading } = useQuery({
+    queryKey: ["messages", selectedChatId],
+    queryFn: () => requestJson<ChatMessagesResponse>(`/chats/${selectedChatId}/messages`),
+    enabled: !!selectedChatId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const activeMessages = useMemo(() => messagseData?.messages ?? [], [messagseData?.messages]);
 
   const referenceChatIds = useMemo(
     () =>
@@ -85,8 +88,11 @@ export function useHomeChat() {
     
     queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => ({
       chats: [chat, ...( prev?.chats ?? [])],
-      messagesByChat: { ...(prev?.messagesByChat ?? {}), [chatId]: [] },
     }));
+
+    queryClient.setQueryData<ChatMessagesResponse>(["messages", chatId], {
+      messages: [],
+    });
 
     setActiveChatId(chatId);
 
@@ -138,14 +144,13 @@ export function useHomeChat() {
   const handleUploadError = (chatId: string) => {
     queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => {
       if (!prev) return prev;
-      const nextMessages = {...prev.messagesByChat};
-      delete nextMessages[chatId];
 
       return {
         chats: prev.chats.filter((chat) => chat.id !== chatId),
-        messagesByChat: nextMessages,
       };
     });
+    queryClient.removeQueries({ queryKey: ["messages", chatId] });
+
     setActiveChatId((current) =>
       current === chatId ? (chats[0]?.id ?? null) : current,
     );
@@ -165,14 +170,12 @@ export function useHomeChat() {
     onSuccess: (_, chat) => {
       queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => {
         if (!prev) return prev;
-        const nextChats = prev.chats.filter((item)=> item.id !== chat.id);
-        const nextMessages = {...prev.messagesByChat};
-        delete nextMessages[chat.id];
         return {
-          chats: nextChats,
-          messagesByChat: nextMessages,
+          chats: prev.chats.filter((item)=> item.id !== chat.id)
         };
       });
+      queryClient.removeQueries({ queryKey: ["messages", chat.id] });
+
       setActiveChatId((current) =>
         current === chat.id ? (chats.find((item) => item.id !== chat.id)?.id ?? null) : current,
       );
@@ -194,6 +197,7 @@ export function useHomeChat() {
     chats,
     activeChat,
     activeMessages,
+    isMessagesLoading,
     activeChatId: selectedChatId,
     deletingChatId: deleteChatMutation.isPending ? deleteChatMutation.variables?.id : null,
     referenceChatIds,

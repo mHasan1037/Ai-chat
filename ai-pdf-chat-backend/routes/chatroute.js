@@ -4,6 +4,7 @@ import {
   createChat,
   deleteChat,
   getChats,
+  getChatMessages,
   saveMessages,
   updateChat,
   uploadPdf,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get("/chats", getChats);
+router.get("/chats/:chatId/messages", getChatMessages);
 router.post("/chats", createChat);
 router.patch("/chats/:chatId", updateChat);
 router.put("/chats/:chatId/messages", saveMessages);
