@@ -14,6 +14,9 @@ export default function Home() {
     chats,
     activeChat,
     activeMessages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     isMessagesLoading,
     activeChatId,
     deletingChatId,
@@ -68,6 +71,9 @@ export default function Home() {
           messages={activeMessages}
           referenceChatIds={referenceChatIds}
           isMessagesLoading={isMessagesLoading}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
         />
       </div>
     </div>
