@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ChatInput from "./ChatInput";
 import AllChats from "./AllChats";
 import { useAIChat } from "../hooks/useAIChat";
@@ -20,6 +20,7 @@ export type Source = {
 };
 
 export type ChatMessage = {
+  chatId?: string;
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -51,37 +52,34 @@ const MainChatContainer = ({
   hasNextPage,
   isFetchingNextPage,
 }: Props) => {
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const prevScrollHeight = useRef<number>(0);
-  const isFetchingMoreRef = useRef(false);
   const isInitialLoad = useRef(true);
   const updateMessages = useUpdateMessages(activeChat);
   const chatWithAiMutation = useAIChat();
 
   useEffect(() => {
     isInitialLoad.current = true;
-    isFetchingMoreRef.current = false;
   }, [activeChat?.id]);
 
   useEffect(() => {
     const container = scrollRef.current;
-    if (!container) return;
-    if (isInitialLoad.current && messages.length > 0) {
-      container.scrollTop = container.scrollHeight;
-      isInitialLoad.current = false;
-    }
+    if (!container || !isInitialLoad.current || messages.length === 0) return;
+    container.scrollTop = container.scrollHeight;
+    isInitialLoad.current = false;
   }, [activeChat?.id, messages.length]);
 
   useLayoutEffect(()=>{
     const container = scrollRef.current;
-    if (!container || !isFetchingMoreRef.current) return;
+    if (!container || !isInitialLoad.current) return;
 
     const newScrollHeight = container.scrollHeight;
     const scrollDiff = newScrollHeight - prevScrollHeight.current;
-    if (scrollDiff > 0) {
+    if (scrollDiff > 0 && prevScrollHeight.current > 0) {
       container.scrollTop += scrollDiff;
     }
-    isFetchingMoreRef.current = false;
+    prevScrollHeight.current = 0;
   }, [messages.length])
 
   useEffect(() => {
@@ -89,13 +87,9 @@ const MainChatContainer = ({
     if (!container) return;
 
     const handleScroll = () => {
-      if (isInitialLoad.current) return;
-      if (!hasNextPage) return;
-      if (isFetchingMoreRef.current) return;
-      if(isFetchingNextPage) return;
+      if (isInitialLoad.current || !hasNextPage || isFetchingNextPage) return;
 
       if (container.scrollTop < 100) {
-        isFetchingMoreRef.current = true;
         prevScrollHeight.current = container.scrollHeight;
         fetchNextPage();
       }
@@ -115,9 +109,8 @@ const MainChatContainer = ({
     setTimeout(() => {
       const newHeight = container.scrollHeight;
       const diff = newHeight - prevScrollHeight.current;
-      if (diff > 0 && isFetchingMoreRef.current) {
+      if (diff > 0 && !isInitialLoad.current) {
         container.scrollTop += diff;
-        isFetchingMoreRef.current = false;
       }
     }, 0);
   }, [messages.length, isFetchingNextPage]);
@@ -132,6 +125,7 @@ const MainChatContainer = ({
     };
 
     updateMessages((prev) => [...prev, userMsg]);
+    setLoadingChatId(activeChat.id);
 
     chatWithAiMutation.mutate(
       {
@@ -146,8 +140,10 @@ const MainChatContainer = ({
             role: "assistant",
             content: data.answer,
             sources: data.sources,
+            chatId: activeChat.id,
           };
           updateMessages((prev) => [...prev, aiMsg]);
+          setLoadingChatId(null);
         },
         onError: (error) => {
           const aiMsg: ChatMessage = {
@@ -159,6 +155,7 @@ const MainChatContainer = ({
                 : "I could not answer from this PDF yet.",
           };
           updateMessages((prev) => [...prev, aiMsg]);
+          setLoadingChatId(null);
         },
       },
     );
@@ -184,7 +181,7 @@ const MainChatContainer = ({
         )}
         <AllChats
           messages={messages}
-          isLoading={chatWithAiMutation.isPending}
+          isLoading={loadingChatId === messages[0]?.chatId}
           scrollRef={scrollRef}
         />
       </div>
