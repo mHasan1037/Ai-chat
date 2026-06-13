@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
-import { getChatsCollection } from "../config/db.js";
+import { ObjectId } from "mongodb";
+import { getChatsCollection, getMessagesCollection } from "../config/db.js";
 import {
   GLOBAL_COLLECTION_NAME,
   normalizeMessages,
@@ -81,7 +82,6 @@ export const getChats = async (_req, res) => {
     const storedChats = await collection
       .find({ userId: _req.user.id })
       .sort({ updatedAt: -1 })
-      .project({ messages: 0 })
       .toArray();
 
     return res.json({
@@ -95,15 +95,49 @@ export const getChats = async (_req, res) => {
 
 export const getChatMessages = async (req, res) => {
   try {
-    const collection = await getChatsCollection();
-    const chat = await collection.findOne(
+    const chatsCollection = await getChatsCollection();
+    const chat = await chatsCollection.findOne(
       { id: req.params.chatId, userId: req.user.id },
-      { projection: { messages: 1 } },
     );
     if (!chat) {
       return res.status(404).json({ error: "Chat not found" });
-    }
-    return res.json({ messages: normalizeMessages(chat.messages) });
+    };
+
+    const limit = Math.min(parseInt(req.query.limit ?? "20", 10), 100);
+    // changing skip to cursor
+    //const skip = parseInt(req.query.skip ?? "0", 10);
+    const cursor = req.query.cursor;
+
+    const messagesCollection = await getMessagesCollection();
+
+    const query = { chatId: req.params.chatId };
+    if (cursor) {
+      query._id = { $lt: new ObjectId(cursor) };
+    };
+
+    const messages = await messagesCollection
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .toArray();
+
+    const hasMore = messages.length > limit;
+    const pageMessages = hasMore ? messages.slice(0, limit) : messages;
+    const nextCursor =
+      hasMore 
+        ? pageMessages[pageMessages.length - 1]._id.toString()
+        : null;
+
+    const shaped = pageMessages.reverse().map((message) => ({
+       ...message,
+       id: message.id,
+    }));
+    console.log('nextCursor:', nextCursor);
+    return res.json({
+      messages: normalizeMessages(shaped),
+      hasMore,
+      nextCursor,
+    });
   } catch (error) {
     console.error("Get chat messages error:", error);
     return res.status(500).json({ error: error.message });
@@ -114,49 +148,42 @@ export const createChat = async (req, res) => {
   try {
     const now = new Date().toISOString();
     const chatId = req.body.id || crypto.randomUUID();
-    const messages = normalizeMessages(req.body.messages);
-    const chat = {
-      userId: req.user.id,
-      id: chatId,
-      title: req.body.title || "PDF Chat",
-      fileName: req.body.fileName || "Document.pdf",
-      filePath: req.body.filePath,
-      fileUrl: req.body.fileUrl,
-      cloudinaryPublicId: req.body.cloudinaryPublicId,
-      collectionName: GLOBAL_COLLECTION_NAME,
-      createdAt: req.body.createdAt || now,
-      updatedAt: req.body.updatedAt || now,
-      messageCount: req.body.messageCount ?? messages.length,
-      messages,
-    };
 
-    const collection = await getChatsCollection();
-    const result = await collection.findOneAndUpdate(
-      { id: chat.id, userId: req.user.id },
+    const chatsCollection = await getChatsCollection();
+    const result = await chatsCollection.findOneAndUpdate(
+      { id: chatId, userId: req.user.id },
       {
         $setOnInsert: {
           userId: req.user.id,
           id: chatId,
-          createdAt: chat.createdAt,
-          messages: chat.messages,
-          messageCount: chat.messageCount,
+          createdAt: req.body.createdAt || now,
         },
         $set: {
-          title: chat.title,
-          fileName: chat.fileName,
-          filePath: chat.filePath,
-          collectionName: chat.collectionName,
-          updatedAt: chat.updatedAt,
-          ...(chat.fileUrl != null ? { fileUrl: chat.fileUrl } : {}),
-          ...(chat.cloudinaryPublicId != null
-            ? { cloudinaryPublicId: chat.cloudinaryPublicId }
+          title: req.body.title || "PDF Chat",
+          fileName: req.body.fileName || "Document.pdf",
+          filePath: req.body.filePath,
+          collectionName: GLOBAL_COLLECTION_NAME,
+          updatedAt: req.body.updatedAt || now,
+          ...(req.body.fileUrl != null ? { fileUrl: req.body.fileUrl } : {}),
+          ...(req.body.cloudinaryPublicId != null
+            ? { cloudinaryPublicId: req.body.cloudinaryPublicId }
             : {}),
         },
       },
       { upsert: true, returnDocument: "after" },
     );
 
-    return res.status(201).json({ chat: serializeChat(result) });
+
+    const incomingMessages = normalizeMessages(req.body.messages ?? []);
+    if (incomingMessages.length > 0) {
+      await _upsertMessages(chatId, req.user.id, incomingMessages);
+    }
+
+    const messageCount = await _syncMessageCount(
+      chatsCollection, chatId, req.user.id,
+    );
+
+    return res.status(201).json({ chat: serializeChat({ ...result, messageCount }) });
   } catch (error) {
     console.error("Create chat error:", error);
     return res.status(500).json({ error: error.message });
@@ -203,13 +230,16 @@ export const saveMessages = async (req, res) => {
   try {
     const messages = normalizeMessages(req.body.messages);
     const now = new Date().toISOString();
-    const collection = await getChatsCollection();
-    const result = await collection.findOneAndUpdate(
-      { id: req.params.chatId, userId: req.user.id },
+    const chatId   = req.params.chatId;
+    const userId = req.user.id;
+
+    const chatsCollection  = await getChatsCollection();
+    await chatsCollection.findOneAndUpdate(
+      { id: chatId, userId: userId },
       {
         $setOnInsert: {
-          id: req.params.chatId,
-          userId: req.user.id,
+          id: chatId,
+          userId: userId,
           title: req.body.title || "PDF Chat",
           fileName: req.body.fileName || "Document.pdf",
           filePath: req.body.filePath,
@@ -219,16 +249,19 @@ export const saveMessages = async (req, res) => {
           createdAt: req.body.createdAt || now,
         },
         $set: {
-          messages,
-          messageCount: messages.length,
           updatedAt: req.body.updatedAt || now,
         },
       },
-      { upsert: true, returnDocument: "after" },
+      { upsert: true },
     );
 
+    await _upsertMessages(chatId, userId, messages);
+    const messageCount = await _syncMessageCount(chatsCollection, chatId, userId);
+
+    const chat = await chatsCollection.findOne({ id: chatId, userId: userId });
+
     return res.json({
-      chat: serializeChat(result),
+      chat: serializeChat({ ...chat, messageCount }),
       messages,
     });
   } catch (error) {
@@ -291,6 +324,8 @@ export const chatWithPdf = async (req, res) => {
       .map((chatId) => chatId.trim())
       .filter(Boolean)
       .slice(0, 3);
+
+      console.log('referenceChatIds:', referenceChatIds);
 
     if (!userQuery) {
       return res.status(400).json({ error: "Missing query" });
@@ -404,6 +439,12 @@ export const deleteChat = async (req, res) => {
     await deletePdfFromCloudinary(
       req.body.cloudinaryPublicId || storedChat?.cloudinaryPublicId,
     );
+
+    const messagesCollection = await getMessagesCollection();
+    await messagesCollection.deleteMany({
+      chatId: req.params.chatId,
+      userId: req.user.id,
+    });
     await chatsCollection.deleteOne({
       id: req.params.chatId,
       userId: req.user.id,
@@ -418,3 +459,43 @@ export const deleteChat = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+async function _upsertMessages(chatId, userId, messages) {
+  if (messages.length === 0) return;
+  const messagesCollection = await getMessagesCollection();
+
+  const bulkOps = messages.map((message) => {
+    const messageId = message.id || crypto.randomUUID();
+    return {
+      updateOne: {
+        filter: { id: messageId, chatId, userId },
+        update: {
+          $setOnInsert: {
+            id: messageId,
+            chatId,
+            userId,
+            createdAt: message.createdAt || new Date().toISOString(),
+          },
+          $set: {
+            role: message.role,
+            content: message.content,
+            updatedAt: new Date().toISOString()
+          },
+        },
+        upsert: true,
+      },
+    };
+  });
+
+  await messagesCollection.bulkWrite(bulkOps, { ordered: false });
+}
+
+async function _syncMessageCount(chatsCollection, chatId, userId) {
+  const messagesCollection = await getMessagesCollection();
+  const messageCount = await messagesCollection.countDocuments({ chatId, userId });
+  await chatsCollection.updateOne(
+    { id: chatId, userId },
+    { $set: { messageCount } },
+  );
+  return messageCount;
+}

@@ -6,15 +6,17 @@ import ReactMarkdown from "react-markdown";
 type Props = {
   messages: ChatMessage[];
   isLoading: boolean;
+  scrollRef?: React.RefObject<HTMLDivElement | null > | null;
 };
 
-const AllChats = ({ messages, isLoading }: Props) => {
+const AllChats = ({ messages, isLoading, scrollRef }: Props) => {
   const { theme } = useTheme();
   const dark = theme === "dark";
 
   return (
     <div
-      className="h-full overflow-y-auto px-6 py-6 flex flex-col gap-4 scroll-smooth
+      ref={scrollRef}
+      className="h-full overflow-y-auto px-6 py-6 flex flex-col gap-4
       [scrollbar-width:thin] [scrollbar-color:rgba(128,128,128,0.2)_transparent]"
     >
       {messages.length === 0 && (

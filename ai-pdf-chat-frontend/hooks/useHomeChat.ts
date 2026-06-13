@@ -2,11 +2,21 @@ import { useMemo, useState } from "react";
 import { ChatMessage } from "@/components/MainChatContainer";
 import { ChatSession } from "@/components/ChatHistory";
 import { apiRequest } from "@/lib/authClient";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  InfiniteData,
+} from "@tanstack/react-query";
 
 export type ChatMessagesResponse = {
   messages: ChatMessage[];
+  nextCursor?: string | null;
+  hasMore: boolean;
 };
+
+export type ChatMessagesInfiniteData = InfiniteData<ChatMessagesResponse>;
 
 export type StoredChatsResponse = {
   chats: ChatSession[];
@@ -34,7 +44,10 @@ const createChatTitle = (fileName: string) =>
     .replace(/[-_]+/g, " ")
     .trim() || "PDF Chat";
 
-export const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
+export const requestJson = async <T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> => {
   return apiRequest<T>(path, init);
 };
 
@@ -46,7 +59,7 @@ export function useHomeChat() {
     staleTime: 1000 * 60 * 5,
   });
   const chats = useMemo(() => data?.chats ?? [], [data?.chats]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(()=> null);
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => null);
   const selectedChatId = activeChatId ?? chats[0]?.id ?? null;
 
   const activeChat = useMemo(
@@ -54,14 +67,37 @@ export function useHomeChat() {
     [selectedChatId, chats],
   );
 
-  const {data: messagseData, isLoading: isMessagesLoading } = useQuery({
+  const {
+    data: messagseData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isMessagesLoading,
+  } = useInfiniteQuery({
     queryKey: ["messages", selectedChatId],
-    queryFn: () => requestJson<ChatMessagesResponse>(`/chats/${selectedChatId}/messages`),
     enabled: !!selectedChatId,
-    staleTime: 1000 * 60 * 5,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({
+        limit: "10",
+      });
+      if (pageParam) params.set("cursor", pageParam);
+      return requestJson<ChatMessagesResponse>(
+        `/chats/${selectedChatId}/messages?${params}`,
+      );
+    },
+    getNextPageParam: (lastPage: ChatMessagesResponse) => {
+      if (!lastPage?.hasMore) return undefined;
+      return lastPage.nextCursor ?? undefined;
+    },
   });
 
-  const activeMessages = useMemo(() => messagseData?.messages ?? [], [messagseData?.messages]);
+
+  const activeMessages = useMemo(() => {
+    if (!messagseData) return [];
+
+    return messagseData.pages.flatMap((page) => [...page.messages]);
+  }, [messagseData]);
 
   const referenceChatIds = useMemo(
     () =>
@@ -85,13 +121,14 @@ export function useHomeChat() {
       updatedAt: now,
       messageCount: 0,
     };
-    
+
     queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => ({
-      chats: [chat, ...( prev?.chats ?? [])],
+      chats: [chat, ...(prev?.chats ?? [])],
     }));
 
-    queryClient.setQueryData<ChatMessagesResponse>(["messages", chatId], {
-      messages: [],
+    queryClient.setQueryData<ChatMessagesInfiniteData>(["messages", chatId], {
+      pages: [{ messages: [], hasMore: false, nextCursor: null }],
+      pageParams: [null],
     });
 
     setActiveChatId(chatId);
@@ -109,7 +146,7 @@ export function useHomeChat() {
   const handleUploadSuccess = ({ chatId, uploadedFile }: FileUploadProps) => {
     if (!uploadedFile) return;
     const now = new Date().toISOString();
-    
+
     queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => {
       if (!prev) return prev;
       return {
@@ -127,7 +164,7 @@ export function useHomeChat() {
         ),
       };
     });
-    
+
     void requestJson(`/chats/${chatId}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -158,26 +195,28 @@ export function useHomeChat() {
 
   const deleteChatMutation = useMutation({
     mutationFn: (chat: ChatSession) => {
-      return requestJson(`/chats/${chat.id}`, { 
+      return requestJson(`/chats/${chat.id}`, {
         method: "DELETE",
-        body: JSON.stringify({ 
-          collectionName: chat.collectionName ,
+        body: JSON.stringify({
+          collectionName: chat.collectionName,
           filePath: chat.filePath,
           cloudinaryPublicId: chat.cloudinaryPublicId,
-        }), 
+        }),
       });
     },
     onSuccess: (_, chat) => {
       queryClient.setQueryData<StoredChatsResponse>(["chats"], (prev) => {
         if (!prev) return prev;
         return {
-          chats: prev.chats.filter((item)=> item.id !== chat.id)
+          chats: prev.chats.filter((item) => item.id !== chat.id),
         };
       });
       queryClient.removeQueries({ queryKey: ["messages", chat.id] });
 
       setActiveChatId((current) =>
-        current === chat.id ? (chats.find((item) => item.id !== chat.id)?.id ?? null) : current,
+        current === chat.id
+          ? (chats.find((item) => item.id !== chat.id)?.id ?? null)
+          : current,
       );
     },
     onError: (error) => {
@@ -197,9 +236,14 @@ export function useHomeChat() {
     chats,
     activeChat,
     activeMessages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     isMessagesLoading,
     activeChatId: selectedChatId,
-    deletingChatId: deleteChatMutation.isPending ? deleteChatMutation.variables?.id : null,
+    deletingChatId: deleteChatMutation.isPending
+      ? deleteChatMutation.variables?.id
+      : null,
     referenceChatIds,
     setActiveChatId,
     handleUploadStart,

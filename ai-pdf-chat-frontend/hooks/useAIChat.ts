@@ -30,9 +30,6 @@ const chatWithAi = async ({
 export const useAIChat = () => {
   return useMutation({
     mutationFn: chatWithAi,
-    onSuccess: (data) => {
-      console.log("Chat is sent:", data);
-    },
     onError: (error) => {
       console.error("Chat sent error:", error);
     },

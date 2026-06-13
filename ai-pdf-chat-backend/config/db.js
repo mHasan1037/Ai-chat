@@ -22,6 +22,16 @@ export const getChatsCollection = async () => {
   return database.collection("chats");
 };
 
+export const getMessagesCollection = async () =>{
+  const db = await getDb();
+  const col = db.collection("chat_messages");
+
+  await col.createIndex({ chatId: 1, createdAt: -1 }, { background: true });
+  await col.createIndex({userId: 1}, {background: true});
+
+  return col;
+}
+
 export const getUsersCollection = async () => {
   const database = await getDb();
   const collection = database.collection("users");
