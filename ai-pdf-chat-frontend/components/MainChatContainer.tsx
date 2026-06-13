@@ -181,7 +181,7 @@ const MainChatContainer = ({
         )}
         <AllChats
           messages={messages}
-          isLoading={loadingChatId === messages[0]?.chatId}
+          aiResponseLoading={loadingChatId === messages[0]?.chatId}
           scrollRef={scrollRef}
         />
       </div>

@@ -2,14 +2,16 @@ import React from "react";
 import { ChatMessage } from "./MainChatContainer";
 import { useTheme } from "@/context/ThemeContext";
 import ReactMarkdown from "react-markdown";
+import ChatLoader from "./ChatLoader";
+import EmptyChatScreen from "./EmptyChatScreen";
 
 type Props = {
   messages: ChatMessage[];
-  isLoading: boolean;
+  aiResponseLoading: boolean;
   scrollRef?: React.RefObject<HTMLDivElement | null > | null;
 };
 
-const AllChats = ({ messages, isLoading, scrollRef }: Props) => {
+const AllChats = ({ messages, aiResponseLoading, scrollRef }: Props) => {
   const { theme } = useTheme();
   const dark = theme === "dark";
 
@@ -20,19 +22,7 @@ const AllChats = ({ messages, isLoading, scrollRef }: Props) => {
       [scrollbar-width:thin] [scrollbar-color:rgba(128,128,128,0.2)_transparent]"
     >
       {messages.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center text-center py-24 select-none">
-          <div
-            className={`w-16 h-16 rounded-2xl border flex items-center justify-center mb-4
-            ${dark ? "bg-white/5 border-white/10" : "bg-black/5 border-black/10"}`}
-          >
-            <span className="text-2xl">✦</span>
-          </div>
-          <p
-            className={`text-sm font-mono tracking-wide ${dark ? "text-white/30" : "text-gray-400"}`}
-          >
-            Ask me anything about your documents
-          </p>
-        </div>
+        <EmptyChatScreen darkTheme={dark} />
       )}
 
       {messages.map((msg) => (
@@ -55,18 +45,9 @@ const AllChats = ({ messages, isLoading, scrollRef }: Props) => {
         </div>
       ))}
 
-      {isLoading && (
-        <div className="flex justify-start">
-          <div
-            className={`rounded-2xl rounded-bl-sm px-4 py-3 backdrop-blur-sm
-            ${dark ? "bg-white/8 border border-white/10" : "bg-white/80 border border-black/10 shadow-sm"}`}
-          >
-            <div className="flex gap-1.5 items-center h-4">
-              <span className="w-1.5 h-1.5 bg-amber-400/70 rounded-full animate-bounce [animation-delay:0ms]" />
-              <span className="w-1.5 h-1.5 bg-amber-400/70 rounded-full animate-bounce [animation-delay:150ms]" />
-              <span className="w-1.5 h-1.5 bg-amber-400/70 rounded-full animate-bounce [animation-delay:300ms]" />
-            </div>
-          </div>
+      {aiResponseLoading && (
+        <div className="flex">
+          <ChatLoader darkTheme={dark} />
         </div>
       )}
     </div>
