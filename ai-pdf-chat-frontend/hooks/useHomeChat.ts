@@ -92,11 +92,13 @@ export function useHomeChat() {
     },
   });
 
-
   const activeMessages = useMemo(() => {
     if (!messagseData) return [];
 
-    return messagseData.pages.flatMap((page) => [...page.messages]);
+    return messagseData.pages
+      .slice()
+      .reverse()
+      .flatMap((page) => [...page.messages]);
   }, [messagseData]);
 
   const referenceChatIds = useMemo(

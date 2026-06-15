@@ -43,11 +43,23 @@ export const useUpdateMessages = (activeChat: ChatSession | null) => {
         pageParams: [null],
       };
 
+      // Get only the messages that already exist across ALL pages
+      const existingIds = new Set(
+        prev.pages.flatMap((p) => p.messages).map((m) => m.id)
+      );
+      const newOnly = nextMessages.filter((m) => !existingIds.has(m.id));
+
+      // Append new messages to the last page only
+      const newestPage = prev.pages[0];
+
       return {
         ...prev,
        pages: [
-          ...prev.pages.slice(0, -1),
-          { ...prev.pages[prev.pages.length - 1], messages: nextMessages },
+          { 
+            ...newestPage,
+            messages: [...newestPage.messages, ...newOnly],
+          },
+          ...prev.pages.slice(1),
         ],
       };  
     });

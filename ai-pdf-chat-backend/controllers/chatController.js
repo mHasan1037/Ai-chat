@@ -132,7 +132,7 @@ export const getChatMessages = async (req, res) => {
        ...message,
        id: message.id,
     }));
-    console.log('nextCursor:', nextCursor);
+
     return res.json({
       messages: normalizeMessages(shaped),
       hasMore,
