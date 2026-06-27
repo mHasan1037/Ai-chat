@@ -3,7 +3,7 @@ import {
   MessagesPlaceholder,
 } from "@langchain/core/prompts";
 import { getEmbeddings, llm } from "./embeddings.js";
-import { GLOBAL_COLLECTION_NAME } from "./helpers.js";
+import { buildDocumentFilter, GLOBAL_COLLECTION_NAME } from "./helpers.js";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { RunnableSequence } from "@langchain/core/runnables";
@@ -33,12 +33,7 @@ export async function buildHistoryAwareRetriever(userId, chatId, topK = 4) {
 
     const baseRetriever = vectorStore.asRetriever({
         k: topK,
-        filter: {
-            must: [
-                {key: "metadata.userId", match: { value: userId } },
-                {key: "metadata.chatId", match: { value: chatId }}
-            ]
-        }
+        filter: buildDocumentFilter({ userId, chatId })
     });
 
     return RunnableSequence.from([

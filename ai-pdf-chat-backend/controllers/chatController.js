@@ -3,6 +3,7 @@ import fs from "fs";
 import { ObjectId } from "mongodb";
 import { getChatsCollection, getMessagesCollection } from "../config/db.js";
 import {
+  buildDocumentFilter,
   GLOBAL_COLLECTION_NAME,
   normalizeMessages,
   serializeChat,
@@ -15,26 +16,6 @@ import crypto from "crypto";
 import { getEmbeddings, llm, pdfEmbeddingQueue } from "../utils/embeddings.js";
 import { getRecentHistory } from "../utils/chatHistory.js";
 import { buildHistoryAwareRetriever, toMessageObjects } from "../utils/historyAwareRetriever.js";
-
-const buildDocumentFilter = ({ chatId, userId } = {}) => {
-  const must = [];
-
-  if (chatId) {
-    must.push({
-      key: "metadata.chatId",
-      match: { value: chatId },
-    });
-  }
-
-  if (userId) {
-    must.push({
-      key: "metadata.userId",
-      match: { value: userId },
-    });
-  }
-
-  return must.length > 0 ? { must } : undefined;
-};
 
 const queryValueToString = (value) => {
   if (Array.isArray(value)) return value[0] || "";
@@ -327,7 +308,6 @@ export const chatWithPdf = async (req, res) => {
       .filter(Boolean)
       .slice(0, 3);
 
-      console.log('referenceChatIds:', referenceChatIds);
 
     if (!userQuery) {
       return res.status(400).json({ error: "Missing query" });
