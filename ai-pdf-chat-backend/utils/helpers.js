@@ -66,3 +66,23 @@ export const publicUser = (user) => ({
   email: user.email,
   createdAt: user.createdAt,
 });
+
+export const buildDocumentFilter = ({ chatId, userId } = {}) => {
+  const must = [];
+
+  if (chatId) {
+    must.push({
+      key: "metadata.chatId",
+      match: { value: chatId },
+    });
+  }
+
+  if (userId) {
+    must.push({
+      key: "metadata.userId",
+      match: { value: userId },
+    });
+  }
+
+  return must.length > 0 ? { must } : undefined;
+};

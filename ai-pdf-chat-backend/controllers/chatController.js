@@ -3,6 +3,7 @@ import fs from "fs";
 import { ObjectId } from "mongodb";
 import { getChatsCollection, getMessagesCollection } from "../config/db.js";
 import {
+  buildDocumentFilter,
   GLOBAL_COLLECTION_NAME,
   normalizeMessages,
   serializeChat,
@@ -13,26 +14,8 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import crypto from "crypto";
 import { getEmbeddings, llm, pdfEmbeddingQueue } from "../utils/embeddings.js";
-
-const buildDocumentFilter = ({ chatId, userId } = {}) => {
-  const must = [];
-
-  if (chatId) {
-    must.push({
-      key: "metadata.chatId",
-      match: { value: chatId },
-    });
-  }
-
-  if (userId) {
-    must.push({
-      key: "metadata.userId",
-      match: { value: userId },
-    });
-  }
-
-  return must.length > 0 ? { must } : undefined;
-};
+import { getRecentHistory } from "../utils/chatHistory.js";
+import { buildHistoryAwareRetriever, toMessageObjects } from "../utils/historyAwareRetriever.js";
 
 const queryValueToString = (value) => {
   if (Array.isArray(value)) return value[0] || "";
@@ -325,7 +308,6 @@ export const chatWithPdf = async (req, res) => {
       .filter(Boolean)
       .slice(0, 3);
 
-      console.log('referenceChatIds:', referenceChatIds);
 
     if (!userQuery) {
       return res.status(400).json({ error: "Missing query" });
@@ -335,14 +317,21 @@ export const chatWithPdf = async (req, res) => {
       return res.status(400).json({ error: "Missing chatId" });
     }
 
+    const rawHistory = await getRecentHistory(currentChatId, req.user.id, 6);
+    const chatHistory = toMessageObjects(rawHistory);
+
+    const historyAwareRetriever = await buildHistoryAwareRetriever(
+      req.user.id,
+      currentChatId,
+      4
+    )
+
+    const primaryDocs = await historyAwareRetriever.invoke({
+      input: userQuery,
+      chat_history: chatHistory
+    })
+
     const embeddings = getEmbeddings();
-    const primaryDocs = await getRelevantDocs(
-      embeddings,
-      GLOBAL_COLLECTION_NAME,
-      userQuery,
-      4,
-      { chatId: currentChatId, userId: req.user.id },
-    );
 
     const referenceDocGroups = await Promise.all(
       referenceChatIds.map(async (referenceChatId) => {
@@ -386,6 +375,7 @@ export const chatWithPdf = async (req, res) => {
 
     const response = await llm.invoke([
       { role: "system", content: systemPrompt },
+      ...rawHistory,
       { role: "user", content: userQuery },
     ]);
 
