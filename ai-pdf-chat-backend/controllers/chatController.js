@@ -332,13 +332,6 @@ export const chatWithPdf = async (req, res) => {
     })
 
     const embeddings = getEmbeddings();
-    // const primaryDocs = await getRelevantDocs(
-    //   embeddings,
-    //   GLOBAL_COLLECTION_NAME,
-    //   userQuery,
-    //   4,
-    //   { chatId: currentChatId, userId: req.user.id },
-    // );
 
     const referenceDocGroups = await Promise.all(
       referenceChatIds.map(async (referenceChatId) => {
