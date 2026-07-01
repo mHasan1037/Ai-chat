@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/authClient";
+import { usePdfUploadStore } from "@/store/pdfUpload.store";
 
 type UploadPdfInput = {
   file: File;
@@ -35,10 +36,12 @@ const uploadPdf = async ({ file, chatId, collectionName }: UploadPdfInput) => {
 };
 
 export const useUpload = () => {
+  const startPolling = usePdfUploadStore((s) => s.startPolling);
+
   return useMutation({
     mutationFn: uploadPdf,
     onSuccess: (data) => {
-      console.log("File uploaded successfully:", data);
+      startPolling(data.chatId);
     },
     onError: (error) => {
       console.error("Error uploading file:", error);

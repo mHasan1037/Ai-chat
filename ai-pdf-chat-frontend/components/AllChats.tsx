@@ -1,19 +1,24 @@
 import React from "react";
 import { ChatMessage } from "./MainChatContainer";
 import { useTheme } from "@/context/ThemeContext";
-import ReactMarkdown from "react-markdown";
 import ChatLoader from "./ChatLoader";
 import EmptyChatScreen from "./EmptyChatScreen";
+import { usePdfStatusPolling } from "@/hooks/usePdfStatusPolling";
+import { ChatSession } from "./ChatHistory";
+import PDFUploadLoader from "./PDFUploadLoader";
+import AllMessages from "./AllMessages";
 
 type Props = {
   messages: ChatMessage[];
   aiResponseLoading: boolean;
   scrollRef?: React.RefObject<HTMLDivElement | null > | null;
+  activeChat: ChatSession | null;
 };
 
-const AllChats = ({ messages, aiResponseLoading, scrollRef }: Props) => {
+const AllChats = ({ messages, aiResponseLoading, scrollRef, activeChat }: Props) => {
   const { theme } = useTheme();
   const dark = theme === "dark";
+  const { statusMessage, uploadStatus, errorMessage } = usePdfStatusPolling(activeChat?.id);
 
   return (
     <div
@@ -25,24 +30,12 @@ const AllChats = ({ messages, aiResponseLoading, scrollRef }: Props) => {
         <EmptyChatScreen darkTheme={dark} />
       )}
 
+      {messages.length === 0 && statusMessage && (
+        <PDFUploadLoader status={uploadStatus} message={errorMessage ?? statusMessage} darkTheme={dark}/>
+      )}
+
       {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-        >
-          <div
-            className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed
-            ${
-              msg.role === "user"
-                ? "bg-amber-400 text-black font-medium rounded-br-sm"
-                : dark
-                  ? "bg-white/8 border border-white/10 text-white/80 rounded-bl-sm backdrop-blur-sm"
-                  : "bg-white/80 border border-black/10 text-gray-700 rounded-bl-sm backdrop-blur-sm shadow-sm"
-            }`}
-          >
-            {msg.role === "user" ? (<p>{msg.content}</p>) : (<ReactMarkdown>{msg.content}</ReactMarkdown>)}
-          </div>
-        </div>
+        <AllMessages key={msg.id} msg={msg} dark={dark} />
       ))}
 
       {aiResponseLoading && (

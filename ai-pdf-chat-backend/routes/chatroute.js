@@ -8,6 +8,7 @@ import {
   saveMessages,
   updateChat,
   uploadPdf,
+  getPdfStatus
 } from "../controllers/chatController.js";
 import upload from "../config/multer.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
@@ -24,5 +25,6 @@ router.put("/chats/:chatId/messages", saveMessages);
 router.post("/upload", upload.single("pdf"), uploadPdf);
 router.get("/chat", chatWithPdf);
 router.delete("/chats/:chatId", deleteChat);
+router.get("/pdf-status/:chatId", getPdfStatus);
 
 export default router;

@@ -5,6 +5,7 @@ import { useAIChat } from "../hooks/useAIChat";
 import type { ChatSession } from "./ChatHistory";
 import { useUpdateMessages } from "@/hooks/useUpdateMessage";
 import MainChatHeader from "./MainChatHeader";
+import { usePdfUploadStore } from "@/store/pdfUpload.store";
 
 export type Source = {
   content: string;
@@ -58,6 +59,7 @@ const MainChatContainer = ({
   const isInitialLoad = useRef(true);
   const updateMessages = useUpdateMessages(activeChat);
   const chatWithAiMutation = useAIChat();
+  const isChatReady = usePdfUploadStore((s) => s.isChatReady);
 
   useEffect(() => {
     isInitialLoad.current = true;
@@ -122,6 +124,7 @@ const MainChatContainer = ({
       id: crypto.randomUUID(),
       role: "user",
       content: chat,
+      chatId: activeChat.id,
     };
 
     updateMessages((prev) => [...prev, userMsg]);
@@ -183,10 +186,11 @@ const MainChatContainer = ({
           messages={messages}
           aiResponseLoading={loadingChatId === messages[0]?.chatId}
           scrollRef={scrollRef}
+          activeChat={activeChat}
         />
       </div>
 
-      <ChatInput chatInput={handleUserChatInput} disabled={!activeChat} />
+      <ChatInput chatInput={handleUserChatInput} disabled={!activeChat || !isChatReady} />
     </div>
   );
 };
