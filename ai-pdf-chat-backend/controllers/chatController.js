@@ -317,6 +317,30 @@ export const chatWithPdf = async (req, res) => {
       return res.status(400).json({ error: "Missing chatId" });
     }
 
+    const chatsCollection = await getChatsCollection();
+    const chatDoc = await chatsCollection.findOne(
+      { id: currentChatId, userId: req.user.id },
+      { projection: { uploadStatus: 1}}
+    );
+
+    if(!chatDoc){
+      return res.status(404).json({ error: "Chat not found."})
+    };
+
+    if(chatDoc.uploadStatus === "processing" || chatDoc.uploadStatus === "queued"){
+      return res.status(202).json({
+        error: "PDF is still being processed. Please wait a moment and try again.",
+        uploadStatus: chatDoc.uploadStatus,
+      })
+    };
+
+    if(chatDoc.uploadStatus === "failed"){
+      return res.status(422).json({
+        error: "PDF processing failed. Please re-upload the file.",
+        uploadStatus: "failed"
+      })
+    }
+
     const rawHistory = await getRecentHistory(currentChatId, req.user.id, 6);
     const chatHistory = toMessageObjects(rawHistory);
 
@@ -449,6 +473,26 @@ export const deleteChat = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+
+export const getPdfStatus = async (req, res) =>{
+    const {chatId} = req.params;
+    const chatsCollection = await getChatsCollection();
+
+    const chat = await chatsCollection.findOne(
+      {id: chatId, userId: req.user.id},
+      {projection: { uploadStatus: 1, fileName: 1, processingError: 1 }}
+    );
+
+    if(!chat) return res.status(404).json({ error: "Chat not found" });
+
+    return res.json({
+      chatId,
+      uploadStatus: chat.uploadStatus,
+      fileName: chat.fileName,
+      ...(chat.processingError && {error: chat.processingError})
+    })    
+}
 
 async function _upsertMessages(chatId, userId, messages) {
   if (messages.length === 0) return;
